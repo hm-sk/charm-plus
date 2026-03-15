@@ -27,7 +27,8 @@ const TEMPLATES_KEY    = 'salon_kaikei_v1_templates';
 const ALLOCATION_KEY   = 'salon_kaikei_v1_allocation';
 const AUTO_RULES_KEY   = 'salon_kaikei_v1_auto_rules';
 const MASTER_KEY       = 'salon_kaikei_v1_master';
-const CUSTOMERS_KEY    = 'charm_plus_customers';
+const CUSTOMERS_KEY     = 'charm_plus_customers';
+const APPOINTMENTS_KEY  = 'charm_plus_appointments';
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwPJ4vodIXXLiozy8HnytXyrSh6PpuqvKCUGpFS-I_Jm-e2HdWVtl_UuukUOeFtCwif/exec';
 
@@ -136,6 +137,23 @@ const GasAPI = {
 
   async deleteCustomer(id) {
     return this._post({ action: 'deleteCustomer', id });
+  },
+
+  async getAppointments(from, to) {
+    const url = `${GAS_URL}?action=getAppointments&from=${from}&to=${to}`;
+    const res = await fetch(url, { redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    return json.appointments || [];
+  },
+
+  async updateAppointmentStatus(id, status, staffNote) {
+    return this._post({ action: 'updateAppointmentStatus', id, status, staffNote });
+  },
+
+  async cancelAppointment(id) {
+    return this._post({ action: 'cancelAppointment', id });
   },
 
   /** 領収書画像をGoogle Driveにアップロードし、ファイルIDを返す */
@@ -475,11 +493,37 @@ const Master = {
   /** メニュー一覧（名前・価格・カテゴリ） */
   getMenus() {
     return this._raw().menus || [
-      { id: 'menu_default_1', name: 'ジェルネイル（ワンカラー）', price: 7000,  category: '売上' },
-      { id: 'menu_default_2', name: 'ジェルネイル（アート）',     price: 10000, category: '売上' },
-      { id: 'menu_default_3', name: 'まつエク（120本）',          price: 8000,  category: '売上' },
-      { id: 'menu_default_4', name: 'まつエク（160本）',          price: 11000, category: '売上' },
+      { id: 'menu_default_1', name: 'ジェルネイル（ワンカラー）', price: 7000,  category: '売上', duration: 90 },
+      { id: 'menu_default_2', name: 'ジェルネイル（アート）',     price: 10000, category: '売上', duration: 120 },
+      { id: 'menu_default_3', name: 'まつエク（120本）',          price: 8000,  category: '売上', duration: 90 },
+      { id: 'menu_default_4', name: 'まつエク（160本）',          price: 11000, category: '売上', duration: 120 },
     ];
+  },
+
+  /** 営業時間設定 */
+  getBusinessHours() {
+    return this._raw().businessHours || {
+      mon: { open: '10:00', close: '19:00' },
+      tue: { open: '10:00', close: '19:00' },
+      wed: null,
+      thu: { open: '10:00', close: '19:00' },
+      fri: { open: '10:00', close: '19:00' },
+      sat: { open: '10:00', close: '18:00' },
+      sun: null,
+    };
+  },
+
+  saveBusinessHours(hours) {
+    this._setRaw({ ...this._raw(), businessHours: hours });
+  },
+
+  /** 予約可能日数（今日から何日先まで受け付けるか） */
+  getBookingWindowDays() {
+    return this._raw().bookingWindowDays || 60;
+  },
+
+  saveBookingWindowDays(days) {
+    this._setRaw({ ...this._raw(), bookingWindowDays: Number(days) || 60 });
   },
 
   saveMenus(menus) {
@@ -759,7 +803,8 @@ const UI = {
     if (name === 'summary')   this.renderSummary();
     if (name === 'ledger')    this.renderLedger();
     if (name === 'settings')  this.renderSettings();
-    if (name === 'customers') CustomerUI.renderCustomers();
+    if (name === 'customers')    CustomerUI.renderCustomers();
+    if (name === 'appointments') AppointmentUI.renderAppointments();
   },
 
   /* ─── ダッシュボード ─────────────────── */
@@ -1155,6 +1200,7 @@ const UI = {
     this._injectAllocationSection();
     this._injectAutoRulesSection();
     this._injectMenuSection();
+    this._injectBusinessHoursSection();
     this._injectCategorySection();
     this._injectPaymentMethodSection();
     this._injectTagSection();
@@ -1659,23 +1705,34 @@ const UI = {
     const menus = Master.getMenus();
 
     const listHtml = menus.map(m => `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
-        <span style="flex:1;font-size:13px;">${this._esc(m.name)}</span>
-        <span style="font-size:13px;font-family:var(--font-serif);color:var(--accent);">¥${Number(m.price).toLocaleString()}</span>
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+        <span style="flex:1;font-size:13px;font-weight:600;">${this._esc(m.name)}</span>
+        <span style="font-size:12px;color:var(--text-sub);white-space:nowrap;">${m.duration || 60}分</span>
+        <span style="font-size:13px;font-family:var(--font-serif);color:var(--accent);white-space:nowrap;">¥${Number(m.price).toLocaleString()}</span>
         <button class="del-menu-btn" data-id="${this._esc(m.id)}"
-          style="background:none;border:1px solid #FECACA;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+          style="background:none;border:1px solid #FECACA;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;flex-shrink:0;">削除</button>
       </div>`).join('');
+
+    const inputStyle = 'border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);width:100%;';
 
     section.innerHTML = `
       <h2 class="section-title">メニュー管理</h2>
-      <p style="font-size:12px;color:var(--text-sub);margin-bottom:12px;">記録フォームで選択すると金額・科目を自動入力します</p>
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:12px;">記録フォームで選択すると金額・科目を自動入力します。施術時間は予約フォームの空き枠計算に使用します。</p>
       <div id="menuList">${listHtml || '<p style="font-size:13px;color:var(--text-light);">メニューがありません</p>'}</div>
-      <div style="display:grid;grid-template-columns:1fr 100px auto;gap:8px;margin-top:12px;align-items:start;">
-        <input type="text" id="newMenuName" placeholder="メニュー名（例：ジェルネイル）" maxlength="30"
-          style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);">
-        <input type="number" id="newMenuPrice" placeholder="金額" min="1" step="1"
-          style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);">
-        <button type="button" id="addMenuBtn" class="btn btn-primary" style="font-size:13px;padding:8px 14px;white-space:nowrap;">追加</button>
+      <div style="display:grid;grid-template-columns:1fr 90px 90px auto;gap:8px;margin-top:12px;align-items:end;">
+        <div>
+          <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:4px;">メニュー名</label>
+          <input type="text" id="newMenuName" placeholder="例：ジェルネイル" maxlength="30" style="${inputStyle}">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:4px;">金額（円）</label>
+          <input type="number" id="newMenuPrice" placeholder="7000" min="1" step="1" style="${inputStyle}">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:4px;">施術時間（分）</label>
+          <input type="number" id="newMenuDuration" placeholder="60" min="15" step="15" value="60" style="${inputStyle}">
+        </div>
+        <button type="button" id="addMenuBtn" class="btn btn-primary" style="font-size:13px;padding:8px 14px;white-space:nowrap;align-self:end;">追加</button>
       </div>
       <div id="menuMsg" class="form-message" style="display:none;margin-top:8px;"></div>
     `;
@@ -1691,20 +1748,130 @@ const UI = {
     });
 
     document.getElementById('addMenuBtn').addEventListener('click', () => {
-      const name  = document.getElementById('newMenuName').value.trim();
-      const price = Number(document.getElementById('newMenuPrice').value);
-      if (!name)        { this._showMsg('menuMsg', '⚠️ メニュー名を入力してください', 'error'); return; }
+      const name     = document.getElementById('newMenuName').value.trim();
+      const price    = Number(document.getElementById('newMenuPrice').value);
+      const duration = Number(document.getElementById('newMenuDuration').value) || 60;
+      if (!name)            { this._showMsg('menuMsg', '⚠️ メニュー名を入力してください', 'error'); return; }
       if (!price || price <= 0) { this._showMsg('menuMsg', '⚠️ 金額を正しく入力してください', 'error'); return; }
       const menus2 = Master.getMenus();
       if (menus2.find(m => m.name === name)) { this._showMsg('menuMsg', '⚠️ 同じ名前のメニューが既にあります', 'error'); return; }
-      menus2.push({ id: `menu_${Date.now()}`, name, price, category: '売上' });
+      menus2.push({ id: `menu_${Date.now()}`, name, price, duration, category: '売上' });
       Master.saveMenus(menus2);
-      document.getElementById('newMenuName').value  = '';
-      document.getElementById('newMenuPrice').value = '';
+      document.getElementById('newMenuName').value     = '';
+      document.getElementById('newMenuPrice').value    = '';
+      document.getElementById('newMenuDuration').value = '60';
       this._renderMenuSection();
       this._rebuildMenuOptions();
       this._saveMasterToGas();
       this._showMsg('menuMsg', `✅「${name}」を追加しました`, 'success');
+    });
+  },
+
+  /* ─── 営業時間・定休日設定 ──────────────── */
+
+  _injectBusinessHoursSection() {
+    if (document.getElementById('businessHoursSection')) {
+      this._renderBusinessHoursSection();
+      return;
+    }
+    const danger = document.querySelector('.danger-zone');
+    const section = document.createElement('div');
+    section.id        = 'businessHoursSection';
+    section.className = 'card form-card';
+    section.style.cssText = 'margin-top:16px;';
+    danger.parentNode.insertBefore(section, danger);
+    this._renderBusinessHoursSection();
+  },
+
+  _renderBusinessHoursSection() {
+    const section = document.getElementById('businessHoursSection');
+    if (!section) return;
+
+    const hours  = Master.getBusinessHours();
+    const window = Master.getBookingWindowDays();
+
+    const days = [
+      { key: 'mon', label: '月' },
+      { key: 'tue', label: '火' },
+      { key: 'wed', label: '水' },
+      { key: 'thu', label: '木' },
+      { key: 'fri', label: '金' },
+      { key: 'sat', label: '土' },
+      { key: 'sun', label: '日' },
+    ];
+
+    const inputStyle = 'border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:6px 8px;font-size:13px;font-family:var(--font-sans);width:80px;';
+
+    const rowsHtml = days.map(d => {
+      const h       = hours[d.key];
+      const isClosed = !h;
+      return `
+        <div class="bh-row" data-day="${d.key}"
+          style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="width:20px;font-weight:700;font-size:13px;text-align:center;">${d.label}</span>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;color:var(--text-sub);">
+            <input type="checkbox" class="bh-closed" data-day="${d.key}" ${isClosed ? 'checked' : ''}
+              style="width:15px;height:15px;accent-color:var(--accent);">
+            定休日
+          </label>
+          <div class="bh-times" style="display:${isClosed ? 'none' : 'flex'};align-items:center;gap:6px;">
+            <input type="time" class="bh-open" data-day="${d.key}" value="${h?.open || '10:00'}" style="${inputStyle}">
+            <span style="font-size:12px;color:var(--text-sub);">〜</span>
+            <input type="time" class="bh-close" data-day="${d.key}" value="${h?.close || '19:00'}" style="${inputStyle}">
+          </div>
+          <span class="bh-closed-label" style="display:${isClosed ? 'inline' : 'none'};font-size:12px;color:var(--text-light);">定休日</span>
+        </div>`;
+    }).join('');
+
+    section.innerHTML = `
+      <h2 class="section-title">営業時間・予約設定</h2>
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:14px;">予約フォームの空き枠計算と受付可能日に使用します</p>
+
+      <h3 style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;">営業時間・定休日</h3>
+      <div id="bhRows">${rowsHtml}</div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <label style="font-size:13px;font-weight:700;white-space:nowrap;">予約受付日数</label>
+        <input type="number" id="bookingWindowDays" value="${window}" min="7" max="365" step="1"
+          style="${inputStyle} width:70px;">
+        <span style="font-size:12px;color:var(--text-sub);">日先まで受け付ける（7〜365）</span>
+      </div>
+
+      <div id="bhMsg" class="form-message" style="display:none;margin-top:10px;"></div>
+      <button type="button" id="saveBusinessHoursBtn" class="btn btn-primary" style="margin-top:14px;">保存する</button>
+    `;
+
+    // 定休日チェックで時間入力の表示切替
+    section.querySelectorAll('.bh-closed').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const row = section.querySelector(`.bh-row[data-day="${cb.dataset.day}"]`);
+        row.querySelector('.bh-times').style.display        = cb.checked ? 'none' : 'flex';
+        row.querySelector('.bh-closed-label').style.display = cb.checked ? 'inline' : 'none';
+      });
+    });
+
+    // 保存
+    document.getElementById('saveBusinessHoursBtn').addEventListener('click', () => {
+      const newHours = {};
+      days.forEach(d => {
+        const closed = section.querySelector(`.bh-closed[data-day="${d.key}"]`).checked;
+        if (closed) {
+          newHours[d.key] = null;
+        } else {
+          const open  = section.querySelector(`.bh-open[data-day="${d.key}"]`).value  || '10:00';
+          const close = section.querySelector(`.bh-close[data-day="${d.key}"]`).value || '19:00';
+          if (open >= close) {
+            this._showMsg('bhMsg', `⚠️ ${d.label}曜日の終了時間は開始より後に設定してください`, 'error');
+            return;
+          }
+          newHours[d.key] = { open, close };
+        }
+      });
+      const windowDays = Number(document.getElementById('bookingWindowDays').value) || 60;
+      Master.saveBusinessHours(newHours);
+      Master.saveBookingWindowDays(windowDays);
+      this._saveMasterToGas();
+      this._showMsg('bhMsg', '✅ 営業時間設定を保存しました', 'success');
     });
   },
 
@@ -2183,10 +2350,11 @@ const UI = {
     menus.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m.id;
-      opt.textContent = `${m.name}（¥${Number(m.price).toLocaleString()}）`;
+      opt.textContent = `${m.name}（¥${Number(m.price).toLocaleString()} / ${m.duration || 60}分）`;
       opt.dataset.price    = m.price;
       opt.dataset.category = m.category;
       opt.dataset.name     = m.name;
+      opt.dataset.duration = m.duration || 60;
       sel.appendChild(opt);
     });
   },
@@ -2758,6 +2926,200 @@ const UI = {
 };
 
 /* =============================================
+   AppointmentData モジュール
+   予約データのローカルキャッシュ＋GAS同期
+   ============================================= */
+const AppointmentData = {
+  _cache: null,
+
+  getAll() {
+    if (this._cache) return this._cache;
+    try { this._cache = JSON.parse(localStorage.getItem(APPOINTMENTS_KEY) || '[]'); } catch { this._cache = []; }
+    return this._cache;
+  },
+
+  saveAll(list) {
+    this._cache = list;
+    localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(list));
+  },
+
+  getByDate(dateStr) {
+    return this.getAll().filter(a => (a.dateTime || '').startsWith(dateStr));
+  },
+
+  async loadFromGas(from, to) {
+    if (!GasAPI.isConfigured()) return false;
+    try {
+      const list = await GasAPI.getAppointments(from, to);
+      // 既存キャッシュと日付範囲をマージ（単純に全上書き）
+      this.saveAll(list);
+      return true;
+    } catch(e) {
+      console.warn('[AppointmentData] load failed:', e.message);
+      return false;
+    }
+  },
+
+  async updateStatus(id, status, staffNote) {
+    if (GasAPI.isConfigured()) await GasAPI.updateAppointmentStatus(id, status, staffNote);
+    const list = this.getAll().map(a =>
+      a.id === id ? { ...a, status, staffNote: staffNote ?? a.staffNote } : a
+    );
+    this.saveAll(list);
+  },
+
+  async cancel(id) {
+    if (GasAPI.isConfigured()) await GasAPI.cancelAppointment(id);
+    const list = this.getAll().map(a => a.id === id ? { ...a, status: 'cancelled' } : a);
+    this.saveAll(list);
+  },
+};
+
+/* =============================================
+   AppointmentUI モジュール
+   予約タブ（日次ビュー・ステータス管理）
+   ============================================= */
+const AppointmentUI = {
+  init() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('apptDate').value = today;
+
+    document.getElementById('apptPrevDay').addEventListener('click', () => {
+      const d = new Date(document.getElementById('apptDate').value + 'T00:00:00');
+      d.setDate(d.getDate() - 1);
+      document.getElementById('apptDate').value = d.toISOString().split('T')[0];
+      this.renderAppointments();
+    });
+
+    document.getElementById('apptNextDay').addEventListener('click', () => {
+      const d = new Date(document.getElementById('apptDate').value + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      document.getElementById('apptDate').value = d.toISOString().split('T')[0];
+      this.renderAppointments();
+    });
+
+    document.getElementById('apptToday').addEventListener('click', () => {
+      document.getElementById('apptDate').value = new Date().toISOString().split('T')[0];
+      this.renderAppointments();
+    });
+
+    document.getElementById('apptDate').addEventListener('change', () => this.renderAppointments());
+  },
+
+  async renderAppointments() {
+    const dateStr = document.getElementById('apptDate').value;
+    const el      = document.getElementById('appointmentList');
+    if (!el) return;
+
+    // 日付ラベル
+    const [y, m, d] = dateStr.split('-');
+    const weekDays  = ['日','月','火','水','木','金','土'];
+    const dow       = weekDays[new Date(dateStr + 'T00:00:00').getDay()];
+    const label     = `${y}年${Number(m)}月${Number(d)}日（${dow}）`;
+
+    el.innerHTML = `<div style="font-family:var(--font-serif);font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">${label}の予約</div>
+      <div style="text-align:center;padding:24px;color:var(--text-sub);font-size:13px;">読み込み中...</div>`;
+
+    // GASから当日の予約を取得
+    if (GasAPI.isConfigured() && navigator.onLine) {
+      await AppointmentData.loadFromGas(dateStr, dateStr);
+    }
+
+    const appts = AppointmentData.getByDate(dateStr)
+      .sort((a, b) => (a.dateTime || '').localeCompare(b.dateTime || ''));
+
+    const statusOrder = { pending: 0, confirmed: 1, completed: 2, noshow: 3, cancelled: 4 };
+    appts.sort((a, b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9) ||
+                         (a.dateTime || '').localeCompare(b.dateTime || ''));
+
+    if (!appts.length) {
+      el.innerHTML = `<div style="font-family:var(--font-serif);font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">${label}の予約</div>
+        <p style="text-align:center;color:var(--text-light);font-size:13px;padding:32px 0;">予約はありません</p>`;
+      return;
+    }
+
+    const statusBadge = { pending: '🟡 未確認', confirmed: '🟢 確定', completed: '✅ 完了', cancelled: '❌ キャンセル', noshow: '🔴 NC' };
+    const statusColor = { pending: '#FEF3C7', confirmed: '#EAF3EC', completed: '#F0F0F0', cancelled: '#F5F5F5', noshow: '#F5EDED' };
+
+    const cardsHtml = appts.map(a => {
+      const time = (a.dateTime || '').substring(11, 16);
+      const badge = statusBadge[a.status] || a.status;
+      const bg    = statusColor[a.status] || '#F5F5F5';
+      const isDimmed = a.status === 'cancelled' || a.status === 'completed' || a.status === 'noshow';
+
+      const actions = [];
+      if (a.status === 'pending') {
+        actions.push(`<button class="appt-action-btn" data-id="${UI._esc(a.id)}" data-action="confirm"
+          style="background:var(--income);color:white;border:none;border-radius:var(--radius-xs);padding:5px 12px;font-size:12px;cursor:pointer;font-family:var(--font-sans);font-weight:700;">確定する</button>`);
+        actions.push(`<button class="appt-action-btn" data-id="${UI._esc(a.id)}" data-action="cancel"
+          style="background:none;border:1px solid #FECACA;border-radius:var(--radius-xs);padding:5px 12px;font-size:12px;cursor:pointer;color:#EF4444;font-family:var(--font-sans);">キャンセル</button>`);
+      } else if (a.status === 'confirmed') {
+        actions.push(`<button class="appt-action-btn" data-id="${UI._esc(a.id)}" data-action="complete"
+          style="background:var(--primary);color:var(--accent);border:none;border-radius:var(--radius-xs);padding:5px 12px;font-size:12px;cursor:pointer;font-family:var(--font-sans);font-weight:700;">完了</button>`);
+        actions.push(`<button class="appt-action-btn" data-id="${UI._esc(a.id)}" data-action="noshow"
+          style="background:none;border:1px solid #FECACA;border-radius:var(--radius-xs);padding:5px 12px;font-size:12px;cursor:pointer;color:#EF4444;font-family:var(--font-sans);">NC</button>`);
+        actions.push(`<button class="appt-action-btn" data-id="${UI._esc(a.id)}" data-action="cancel"
+          style="background:none;border:1px solid var(--border-normal);border-radius:var(--radius-xs);padding:5px 12px;font-size:12px;cursor:pointer;color:var(--text-sub);font-family:var(--font-sans);">取消</button>`);
+      }
+
+      return `
+        <div style="background:${isDimmed ? '#F9F9F8' : 'white'};border:1px solid var(--border);border-radius:var(--radius-sm);
+          padding:14px 16px;margin-bottom:10px;opacity:${isDimmed ? '0.65' : '1'};">
+          <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+            <div style="font-family:var(--font-serif);font-size:1.3rem;font-weight:700;color:var(--text);min-width:52px;">${time || '--:--'}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;font-size:14px;">${UI._esc(a.customerName || '')}</div>
+              <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">${UI._esc(a.menuName || '')} ／ ¥${Number(a.price).toLocaleString()}</div>
+              ${a.phone ? `<div style="font-size:12px;color:var(--text-sub);">${UI._esc(a.phone)}</div>` : ''}
+              ${a.notes ? `<div style="font-size:12px;color:var(--text-sub);margin-top:4px;">備考: ${UI._esc(a.notes)}</div>` : ''}
+            </div>
+            <span style="background:${bg};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;">${badge}</span>
+          </div>
+          ${actions.length ? `<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">${actions.join('')}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div style="font-family:var(--font-serif);font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">${label}の予約 (${appts.length}件)</div>
+      ${cardsHtml}`;
+
+    // ステータス変更ボタン
+    el.querySelectorAll('.appt-action-btn').forEach(btn => {
+      btn.addEventListener('click', () => this._handleAction(btn.dataset.id, btn.dataset.action));
+    });
+  },
+
+  async _handleAction(id, action) {
+    const statusMap = { confirm: 'confirmed', complete: 'completed', noshow: 'noshow', cancel: 'cancelled' };
+    const labelMap  = { confirm: '確定', complete: '完了にする', noshow: '無断欠席（NC）にする', cancel: 'キャンセルにする' };
+    const status    = statusMap[action];
+    if (!status) return;
+
+    // 確認
+    const appt = AppointmentData.getAll().find(a => a.id === id);
+    if (!appt) return;
+    document.getElementById('modalTitle').textContent   = `予約を${labelMap[action]}しますか？`;
+    document.getElementById('modalMessage').textContent = `${appt.customerName} 様 / ${appt.menuName}`;
+    document.getElementById('modal').style.display      = 'flex';
+
+    const confirmBtn = document.getElementById('modalConfirm');
+    const newBtn     = confirmBtn.cloneNode(true);
+    newBtn.textContent = labelMap[action];
+    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+    newBtn.addEventListener('click', async () => {
+      document.getElementById('modal').style.display = 'none';
+      try {
+        await AppointmentData.updateStatus(id, status);
+        UI._showToast(`✅ 予約を${labelMap[action]}にしました`, 'success');
+        this.renderAppointments();
+      } catch(e) {
+        UI._showToast('⚠️ 更新に失敗しました: ' + e.message, 'warn');
+      }
+    });
+  },
+};
+
+/* =============================================
    CustomerData モジュール
    顧客データのローカルキャッシュ＋GAS同期
    ============================================= */
@@ -3030,6 +3392,7 @@ async function init() {
   UI.initLedger();
   UI.initOfflineDetection();
   CustomerUI.init();
+  AppointmentUI.init();
 
   const settings = Storage.getSettings();
   if (settings.businessName && settings.businessName !== 'マイサロン') {
@@ -3051,6 +3414,7 @@ async function init() {
       Storage.loadFromGas(),
       Storage.loadMasterFromGas(),
       CustomerData.loadFromGas(),
+      AppointmentData.loadFromGas(),
     ]);
     if (loaded) {
       UI.renderDashboard();

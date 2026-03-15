@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ご予約 - Charm+</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1C1C1E;--accent:#B8966E;--accent-light:#F5EFE6;--accent-dim:rgba(184,150,110,0.15);
+  --income:#6B9E78;--income-light:#EAF3EC;--bg:#FAFAF8;--card-bg:#FFFFFF;
+  --border:#E8E5DF;--border-normal:#E0DDD7;--text:#1C1C1E;--text-sub:#6B6862;--text-light:#A09D98;
+  --shadow:0 1px 4px rgba(28,28,30,0.06),0 2px 12px rgba(28,28,30,0.04);
+  --radius:10px;--radius-sm:6px;
+  --font-serif:'Cormorant Garamond',Georgia,serif;
+  --font-sans:'Noto Sans JP','Hiragino Sans',sans-serif;
+}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.6;}
+.header{background:var(--primary);color:#F5EFE6;padding:14px 20px;text-align:center;}
+.logo{font-family:var(--font-serif);font-size:1.3rem;font-weight:700;letter-spacing:0.06em;color:var(--accent);}
+.subtitle{font-size:0.7rem;color:rgba(245,239,230,0.6);margin-top:2px;}
+.container{max-width:560px;margin:0 auto;padding:24px 16px 60px;}
+
+/* ステップインジケーター */
+.steps{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:28px;}
+.step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;background:var(--border);color:var(--text-light);transition:all 0.2s;flex-shrink:0;}
+.step-dot.active{background:var(--accent);color:white;}
+.step-dot.done{background:var(--income);color:white;}
+.step-line{flex:1;height:2px;background:var(--border);max-width:40px;}
+.step-line.done{background:var(--income);}
+
+/* カード */
+.card{background:var(--card-bg);border-radius:var(--radius);border:1px solid var(--border);padding:20px;margin-bottom:16px;box-shadow:var(--shadow);}
+.card-title{font-family:var(--font-serif);font-size:1rem;font-weight:700;color:var(--text);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+
+/* メニューカード */
+.menu-card{padding:14px 16px;border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;
+  transition:border-color 0.15s,background 0.15s;margin-bottom:8px;display:flex;align-items:center;gap:12px;}
+.menu-card:hover,.menu-card.selected{border-color:var(--accent);background:var(--accent-light);}
+.menu-card.selected .menu-name{color:var(--accent);}
+.menu-name{font-weight:700;font-size:0.9rem;color:var(--text);flex:1;}
+.menu-meta{text-align:right;flex-shrink:0;}
+.menu-price{font-family:var(--font-serif);font-size:1rem;font-weight:700;color:var(--accent);}
+.menu-duration{font-size:0.72rem;color:var(--text-sub);margin-top:2px;}
+
+/* カレンダー */
+.calendar-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.cal-nav{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text);}
+.cal-nav:hover{border-color:var(--accent);}
+.cal-month{font-family:var(--font-serif);font-size:1rem;font-weight:700;}
+.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-day-label{text-align:center;font-size:11px;color:var(--text-sub);padding:4px 0;font-weight:700;}
+.cal-day-label.sun{color:#B07070;}
+.cal-day-label.sat{color:#6B9E78;}
+.cal-day{text-align:center;padding:8px 4px;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;border:1.5px solid transparent;transition:all 0.15s;}
+.cal-day.available:hover{border-color:var(--accent);background:var(--accent-light);}
+.cal-day.selected{background:var(--accent);color:white;border-color:var(--accent);}
+.cal-day.today{font-weight:700;}
+.cal-day.unavailable{color:var(--text-light);cursor:not-allowed;}
+.cal-day.closed{color:var(--border);cursor:not-allowed;}
+.cal-day.past{color:var(--border);cursor:not-allowed;}
+.cal-day.empty{cursor:default;}
+
+/* 時間スロット */
+.slots-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.slot-btn{padding:10px 4px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);
+  background:white;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--font-sans);
+  color:var(--text);transition:all 0.15s;text-align:center;}
+.slot-btn:hover{border-color:var(--accent);background:var(--accent-light);}
+.slot-btn.selected{background:var(--accent);color:white;border-color:var(--accent);}
+
+/* フォーム */
+.form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.form-group label{font-size:0.8rem;font-weight:700;color:var(--text);}
+.form-group input,.form-group textarea{padding:10px 12px;border:1.5px solid var(--border-normal);
+  border-radius:var(--radius-sm);font-size:0.9rem;font-family:var(--font-sans);background:white;
+  color:var(--text);width:100%;}
+.form-group input:focus,.form-group textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
+.required{color:#B07070;}
+
+/* 確認画面 */
+.confirm-row{display:flex;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;}
+.confirm-label{color:var(--text-sub);width:100px;flex-shrink:0;font-size:13px;}
+.confirm-value{font-weight:600;flex:1;}
+.confirm-price{font-family:var(--font-serif);font-size:1.2rem;color:var(--accent);}
+
+/* ボタン */
+.btn{padding:12px 20px;border:none;border-radius:var(--radius-sm);font-size:0.9rem;font-weight:700;
+  font-family:var(--font-sans);cursor:pointer;transition:all 0.15s;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+.btn-primary{background:var(--primary);color:var(--accent);border:1.5px solid transparent;width:100%;}
+.btn-primary:hover{background:#2C2C2E;border-color:var(--accent);}
+.btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+.btn-secondary{background:white;color:var(--text);border:1.5px solid var(--border-normal);}
+.btn-row{display:flex;gap:10px;margin-top:20px;}
+.btn-row .btn-secondary{flex:0 0 auto;}
+.btn-row .btn-primary{flex:1;}
+
+/* エラー・ローディング */
+.error-msg{background:#F5EDED;border:1px solid #FECACA;color:#9A5E5E;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:12px;display:none;}
+.loading{text-align:center;padding:32px;color:var(--text-sub);font-size:14px;}
+.loading-spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;margin-right:8px;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 完了画面 */
+.complete-icon{font-size:3rem;text-align:center;margin-bottom:16px;}
+.complete-title{font-family:var(--font-serif);font-size:1.4rem;font-weight:700;text-align:center;color:var(--income);margin-bottom:8px;}
+.complete-text{font-size:14px;color:var(--text-sub);text-align:center;line-height:1.8;}
+
+@media(max-width:400px){.slots-grid{grid-template-columns:repeat(3,1fr)}.btn-row{flex-direction:column}}
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">Charm+</div>
+  <div class="subtitle">オンライン予約</div>
+</header>
+
+<div class="container">
+
+  <!-- ステップインジケーター -->
+  <div class="steps" id="stepIndicator">
+    <div class="step-dot active" id="step1">1</div>
+    <div class="step-line" id="line12"></div>
+    <div class="step-dot" id="step2">2</div>
+    <div class="step-line" id="line23"></div>
+    <div class="step-dot" id="step3">3</div>
+    <div class="step-line" id="line34"></div>
+    <div class="step-dot" id="step4">4</div>
+    <div class="step-line" id="line45"></div>
+    <div class="step-dot" id="step5">5</div>
+  </div>
+
+  <!-- Step 1: メニュー選択 -->
+  <div id="screen-menu">
+    <div class="card">
+      <div class="card-title">メニューを選択してください</div>
+      <div id="menuList"><div class="loading"><span class="loading-spinner"></span>読み込み中...</div></div>
+      <div class="error-msg" id="menuError"></div>
+    </div>
+  </div>
+
+  <!-- Step 2: 日付選択 -->
+  <div id="screen-date" style="display:none;">
+    <div class="card">
+      <div class="card-title">日付を選択してください</div>
+      <div class="calendar-header">
+        <button class="cal-nav" id="calPrev">◀</button>
+        <span class="cal-month" id="calMonth"></span>
+        <button class="cal-nav" id="calNext">▶</button>
+      </div>
+      <div class="calendar-grid" id="calGrid">
+        <div class="cal-day-label sun">日</div>
+        <div class="cal-day-label mon">月</div>
+        <div class="cal-day-label tue">火</div>
+        <div class="cal-day-label wed">水</div>
+        <div class="cal-day-label thu">木</div>
+        <div class="cal-day-label fri">金</div>
+        <div class="cal-day-label sat">土</div>
+      </div>
+    </div>
+    <div class="btn-row"><button class="btn btn-secondary" onclick="goStep(1)">← 戻る</button></div>
+  </div>
+
+  <!-- Step 3: 時間選択 -->
+  <div id="screen-time" style="display:none;">
+    <div class="card">
+      <div class="card-title" id="timeDateLabel">時間を選択してください</div>
+      <div id="slotList"><div class="loading"><span class="loading-spinner"></span>空き状況を確認中...</div></div>
+      <div class="error-msg" id="slotError"></div>
+    </div>
+    <div class="btn-row"><button class="btn btn-secondary" onclick="goStep(2)">← 戻る</button></div>
+  </div>
+
+  <!-- Step 4: お客様情報入力 -->
+  <div id="screen-info" style="display:none;">
+    <div class="card">
+      <div class="card-title">お客様情報を入力してください</div>
+      <div class="form-group">
+        <label>お名前 <span class="required">*</span></label>
+        <input type="text" id="inputName" placeholder="例：田中 花子" maxlength="30">
+      </div>
+      <div class="form-group">
+        <label>電話番号 <span class="required">*</span></label>
+        <input type="tel" id="inputPhone" placeholder="例：090-1234-5678" maxlength="20">
+      </div>
+      <div class="form-group">
+        <label>メールアドレス <small style="color:var(--text-sub);">（確認メール送付）</small></label>
+        <input type="email" id="inputEmail" placeholder="例：hanako@example.com" maxlength="80">
+      </div>
+      <div class="form-group">
+        <label>備考 <small style="color:var(--text-sub);">（アレルギー・ご要望など）</small></label>
+        <textarea id="inputNotes" placeholder="ご自由にお書きください" rows="3" maxlength="300" style="resize:vertical;"></textarea>
+      </div>
+      <div class="error-msg" id="infoError"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goStep(3)">← 戻る</button>
+      <button class="btn btn-primary" onclick="goStep(5)">内容を確認する →</button>
+    </div>
+  </div>
+
+  <!-- Step 5: 確認画面 -->
+  <div id="screen-confirm" style="display:none;">
+    <div class="card">
+      <div class="card-title">予約内容のご確認</div>
+      <div class="confirm-row"><span class="confirm-label">メニュー</span><span class="confirm-value" id="cfMenu"></span></div>
+      <div class="confirm-row"><span class="confirm-label">日時</span><span class="confirm-value" id="cfDateTime"></span></div>
+      <div class="confirm-row"><span class="confirm-label">施術時間</span><span class="confirm-value" id="cfDuration"></span></div>
+      <div class="confirm-row"><span class="confirm-label">金額</span><span class="confirm-value confirm-price" id="cfPrice"></span></div>
+      <div class="confirm-row"><span class="confirm-label">お名前</span><span class="confirm-value" id="cfName"></span></div>
+      <div class="confirm-row"><span class="confirm-label">電話番号</span><span class="confirm-value" id="cfPhone"></span></div>
+      <div class="confirm-row" id="cfEmailRow" style="display:none;"><span class="confirm-label">メール</span><span class="confirm-value" id="cfEmail"></span></div>
+      <div class="confirm-row" id="cfNotesRow" style="display:none;"><span class="confirm-label">備考</span><span class="confirm-value" id="cfNotes"></span></div>
+    </div>
+    <div class="error-msg" id="confirmError"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goStep(4)">← 戻る</button>
+      <button class="btn btn-primary" id="submitBtn" onclick="submitBooking()">予約を確定する</button>
+    </div>
+  </div>
+
+  <!-- Step 6: 完了画面 -->
+  <div id="screen-complete" style="display:none;">
+    <div class="card">
+      <div class="complete-icon">✅</div>
+      <div class="complete-title">ご予約を受け付けました</div>
+      <p class="complete-text">
+        ご予約ありがとうございます。<br>
+        確認メールをお送りしました。<br><br>
+        <span id="completeEmailMsg"></span>
+        確定メールが届くまでしばらくお待ちください。<br>
+        ご不明な点はお気軽にご連絡ください。
+      </p>
+    </div>
+    <div style="margin-top:16px;text-align:center;">
+      <button class="btn btn-secondary" onclick="resetForm()">別の予約をする</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── 設定 ──────────────────────────────────────────────────
+// GAS デプロイ後にこの URL を書き換えてください
+const GAS_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+
+// ─── 状態管理 ──────────────────────────────────────────────
+const state = {
+  step:         1,
+  menus:        [],
+  businessHours: null,
+  bookingWindowDays: 60,
+  selectedMenu: null,
+  calYear:      0,
+  calMonth:     0,
+  selectedDate: '',
+  selectedTime: '',
+};
+
+// ─── 初期化 ────────────────────────────────────────────────
+async function init() {
+  const today = new Date();
+  state.calYear  = today.getFullYear();
+  state.calMonth = today.getMonth();
+
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getBookingInfo`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    state.menus             = data.menus || [];
+    state.businessHours     = data.businessHours;
+    state.bookingWindowDays = data.bookingWindowDays || 60;
+    renderMenuList();
+  } catch (e) {
+    showError('menuError', 'メニューの読み込みに失敗しました。ページを再読み込みしてください。');
+    document.getElementById('menuList').innerHTML = '';
+  }
+}
+
+// ─── メニュー一覧 ───────────────────────────────────────────
+function renderMenuList() {
+  const el = document.getElementById('menuList');
+  if (!state.menus.length) {
+    el.innerHTML = '<p style="color:var(--text-light);text-align:center;padding:20px;">現在予約可能なメニューがありません</p>';
+    return;
+  }
+  el.innerHTML = state.menus.map(m => `
+    <div class="menu-card" data-id="${esc(m.id)}" onclick="selectMenu('${esc(m.id)}')">
+      <div>
+        <div class="menu-name">${esc(m.name)}</div>
+        ${m.description ? `<div style="font-size:12px;color:var(--text-sub);margin-top:3px;">${esc(m.description)}</div>` : ''}
+      </div>
+      <div class="menu-meta">
+        <div class="menu-price">¥${Number(m.price).toLocaleString()}</div>
+        <div class="menu-duration">${m.duration || 60}分</div>
+      </div>
+    </div>`).join('');
+}
+
+function selectMenu(id) {
+  state.selectedMenu = state.menus.find(m => m.id === id);
+  if (!state.selectedMenu) return;
+  document.querySelectorAll('.menu-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.id === id);
+  });
+  setTimeout(() => goStep(2), 200);
+}
+
+// ─── カレンダー ─────────────────────────────────────────────
+function renderCalendar() {
+  const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const dayNames   = ['sun','mon','tue','wed','thu','fri','sat'];
+
+  document.getElementById('calMonth').textContent =
+    `${state.calYear}年 ${monthNames[state.calMonth]}`;
+
+  const today      = new Date();
+  today.setHours(0,0,0,0);
+  const maxDate    = new Date(today);
+  maxDate.setDate(maxDate.getDate() + state.bookingWindowDays);
+
+  const firstDay   = new Date(state.calYear, state.calMonth, 1).getDay();
+  const daysInMonth = new Date(state.calYear, state.calMonth + 1, 0).getDate();
+
+  const grid = document.getElementById('calGrid');
+  // ヘッダー行を残してリセット
+  const labels = Array.from(grid.querySelectorAll('.cal-day-label'));
+  grid.innerHTML = '';
+  labels.forEach(l => grid.appendChild(l));
+
+  // 空白セル
+  for (let i = 0; i < firstDay; i++) {
+    const el = document.createElement('div');
+    el.className = 'cal-day empty';
+    grid.appendChild(el);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date    = new Date(state.calYear, state.calMonth, d);
+    const dateStr = `${state.calYear}-${String(state.calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dow     = dayNames[date.getDay()];
+    const el      = document.createElement('div');
+    el.textContent = d;
+
+    let cls = 'cal-day';
+    if (date < today)    { cls += ' past unavailable'; }
+    else if (date > maxDate) { cls += ' past unavailable'; }
+    else {
+      const dayHours = state.businessHours?.[dow];
+      if (!dayHours)   { cls += ' closed unavailable'; }
+      else             { cls += ' available'; }
+    }
+    if (dateStr === state.selectedDate) cls += ' selected';
+    if (date.toDateString() === today.toDateString()) cls += ' today';
+
+    el.className = cls;
+    if (cls.includes('available')) {
+      el.onclick = () => selectDate(dateStr);
+    }
+    grid.appendChild(el);
+  }
+
+  // 前月ボタン
+  const prevDate = new Date(state.calYear, state.calMonth - 1, 1);
+  document.getElementById('calPrev').disabled = prevDate < today;
+}
+
+document.getElementById('calPrev').addEventListener('click', () => {
+  if (state.calMonth === 0) { state.calYear--; state.calMonth = 11; }
+  else state.calMonth--;
+  renderCalendar();
+});
+document.getElementById('calNext').addEventListener('click', () => {
+  if (state.calMonth === 11) { state.calYear++; state.calMonth = 0; }
+  else state.calMonth++;
+  renderCalendar();
+});
+
+function selectDate(dateStr) {
+  state.selectedDate = dateStr;
+  renderCalendar();
+  setTimeout(() => goStep(3), 200);
+}
+
+// ─── 時間スロット ───────────────────────────────────────────
+async function loadSlots() {
+  const el    = document.getElementById('slotList');
+  const label = document.getElementById('timeDateLabel');
+
+  const [y, m, d] = state.selectedDate.split('-');
+  label.textContent = `${y}年${Number(m)}月${Number(d)}日 の空き時間`;
+  el.innerHTML = '<div class="loading"><span class="loading-spinner"></span>空き状況を確認中...</div>';
+  hideError('slotError');
+
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getAvailableSlots&menuId=${encodeURIComponent(state.selectedMenu.id)}&date=${state.selectedDate}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const slots = data.slots || [];
+    if (!slots.length) {
+      el.innerHTML = '<p style="color:var(--text-sub);text-align:center;padding:24px;">この日は空きがありません。<br>別の日をお選びください。</p>';
+      return;
+    }
+    el.innerHTML = `<div class="slots-grid">${slots.map(s => `
+      <button class="slot-btn${s === state.selectedTime ? ' selected' : ''}" onclick="selectTime('${s}')">${s}</button>`
+    ).join('')}</div>`;
+  } catch(e) {
+    el.innerHTML = '';
+    showError('slotError', '空き状況の取得に失敗しました。もう一度お試しください。');
+  }
+}
+
+function selectTime(time) {
+  state.selectedTime = time;
+  document.querySelectorAll('.slot-btn').forEach(b => {
+    b.classList.toggle('selected', b.textContent === time);
+  });
+  setTimeout(() => goStep(4), 200);
+}
+
+// ─── 確認画面 ───────────────────────────────────────────────
+function fillConfirmation() {
+  const [y, m, d] = state.selectedDate.split('-');
+  const weekDays  = ['日','月','火','水','木','金','土'];
+  const dow       = weekDays[new Date(state.selectedDate + 'T00:00:00').getDay()];
+
+  document.getElementById('cfMenu').textContent     = state.selectedMenu.name;
+  document.getElementById('cfDateTime').textContent = `${y}年${Number(m)}月${Number(d)}日（${dow}） ${state.selectedTime}〜`;
+  document.getElementById('cfDuration').textContent = `約${state.selectedMenu.duration || 60}分`;
+  document.getElementById('cfPrice').textContent    = `¥${Number(state.selectedMenu.price).toLocaleString()}`;
+  document.getElementById('cfName').textContent     = document.getElementById('inputName').value;
+  document.getElementById('cfPhone').textContent    = document.getElementById('inputPhone').value;
+
+  const email = document.getElementById('inputEmail').value;
+  const notes = document.getElementById('inputNotes').value;
+  document.getElementById('cfEmailRow').style.display = email ? '' : 'none';
+  document.getElementById('cfEmail').textContent       = email;
+  document.getElementById('cfNotesRow').style.display  = notes ? '' : 'none';
+  document.getElementById('cfNotes').textContent       = notes;
+}
+
+// ─── 予約送信 ───────────────────────────────────────────────
+async function submitBooking() {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '送信中...';
+  hideError('confirmError');
+
+  const dateTime = `${state.selectedDate}T${state.selectedTime}:00`;
+
+  try {
+    const payload = {
+      action: 'createAppointment',
+      data: {
+        customerName: document.getElementById('inputName').value,
+        phone:        document.getElementById('inputPhone').value,
+        email:        document.getElementById('inputEmail').value,
+        menuId:       state.selectedMenu.id,
+        menuName:     state.selectedMenu.name,
+        price:        state.selectedMenu.price,
+        duration:     state.selectedMenu.duration || 60,
+        dateTime,
+        notes:        document.getElementById('inputNotes').value,
+      }
+    };
+    const res  = await fetch(GAS_URL, {
+      method: 'POST',
+      body:   JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // 完了画面
+    const email = document.getElementById('inputEmail').value;
+    document.getElementById('completeEmailMsg').textContent =
+      email ? `確認メールを ${email} にお送りしました。\n` : '';
+    goStep(6);
+  } catch(e) {
+    showError('confirmError', e.message || '予約の送信に失敗しました。もう一度お試しください。');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '予約を確定する';
+  }
+}
+
+// ─── ステップ遷移 ────────────────────────────────────────────
+function goStep(n) {
+  // バリデーション
+  if (n === 2 && !state.selectedMenu) return;
+  if (n === 3 && !state.selectedDate) return;
+  if (n === 4 && !state.selectedTime) return;
+  if (n === 5) {
+    const name  = document.getElementById('inputName').value.trim();
+    const phone = document.getElementById('inputPhone').value.trim();
+    if (!name)  { showError('infoError', '⚠️ お名前を入力してください'); return; }
+    if (!phone) { showError('infoError', '⚠️ 電話番号を入力してください'); return; }
+    hideError('infoError');
+    fillConfirmation();
+  }
+
+  const screens = ['menu','date','time','info','confirm','complete'];
+  screens.forEach((s, i) => {
+    document.getElementById(`screen-${s}`).style.display = (i + 1 === n) ? '' : 'none';
+  });
+
+  // ステップインジケーター更新
+  for (let i = 1; i <= 5; i++) {
+    const dot  = document.getElementById(`step${i}`);
+    const line = i < 5 ? document.getElementById(`line${i}${i+1}`) : null;
+    if (i < n)      { dot.className  = 'step-dot done'; if(line) line.className = 'step-line done'; }
+    else if (i === n){ dot.className = 'step-dot active'; }
+    else            { dot.className  = 'step-dot'; if(line) line.className = 'step-line'; }
+  }
+  state.step = n;
+
+  // 各ステップ初期化
+  if (n === 2) renderCalendar();
+  if (n === 3) loadSlots();
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetForm() {
+  state.selectedMenu = null;
+  state.selectedDate = '';
+  state.selectedTime = '';
+  document.getElementById('inputName').value  = '';
+  document.getElementById('inputPhone').value = '';
+  document.getElementById('inputEmail').value = '';
+  document.getElementById('inputNotes').value = '';
+  goStep(1);
+}
+
+// ─── ユーティリティ ──────────────────────────────────────────
+function esc(str) {
+  const el = document.createElement('div');
+  el.textContent = String(str || '');
+  return el.innerHTML;
+}
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideError(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+
+// ─── 起動 ────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

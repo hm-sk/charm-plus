@@ -21,6 +21,10 @@
 
   <!-- ナビゲーション -->
   <nav class="nav" role="navigation" aria-label="メインメニュー">
+    <button class="nav-btn" data-tab="appointments" aria-label="予約管理">
+      <span class="nav-icon" aria-hidden="true">📅</span>
+      <span>予約</span>
+    </button>
     <button class="nav-btn active" data-tab="dashboard" aria-label="ダッシュボード">
       <span class="nav-icon" aria-hidden="true">📊</span>
       <span>ダッシュボード</span>
@@ -379,6 +383,25 @@
         </div>
         <p id="ledgerEmpty" style="display:none;text-align:center;color:#9CA3AF;padding:20px;">記録がありません</p>
       </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════
+         予約管理 タブ
+    ══════════════════════════════════════ -->
+    <section id="tab-appointments" class="tab-content" aria-label="予約管理">
+
+      <!-- 日付ナビ -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <button id="apptPrevDay" class="btn btn-secondary" style="padding:8px 14px;">◀</button>
+        <input type="date" id="apptDate"
+          style="flex:1;padding:9px 12px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);font-size:0.875rem;font-family:var(--font-sans);background:white;text-align:center;">
+        <button id="apptToday" class="btn btn-secondary" style="padding:8px 14px;white-space:nowrap;">今日</button>
+        <button id="apptNextDay" class="btn btn-secondary" style="padding:8px 14px;">▶</button>
+      </div>
+
+      <!-- 予約リスト (JSで注入) -->
+      <div id="appointmentList"></div>
 
     </section>
 
