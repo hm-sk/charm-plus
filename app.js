@@ -1,6 +1,6 @@
 /**
  * サロン家計簿 - メインアプリケーション
- * Version: 1.4.0 (オンライン専用モード: GAS優先・オフライン入力禁止)
+ * Version: 1.5.0 (GAS URL定数埋め込み・設定UI簡略化)
  *
  * ─ アーキテクチャ概要 ─────────────────────────
  *  GasAPI    … Google Apps Script Web API との HTTP 通信
@@ -20,11 +20,13 @@
    定数・マスターデータ
    ============================================= */
 
-const APP_VERSION   = '1.4.0';
+const APP_VERSION   = '1.5.0';
 const STORAGE_KEY   = 'salon_kaikei_v1_transactions';
 const SETTINGS_KEY  = 'salon_kaikei_v1_settings';
-const GAS_URL_KEY   = 'salon_kaikei_gas_url';
 const TEMPLATES_KEY = 'salon_kaikei_v1_templates';
+
+// ★ GAS Web アプリ URL をここに貼り付けてください
+const GAS_URL = '★ここにGAS URLを貼り付けてください★';
 
 /** 勘定科目マスター（青色申告決算書準拠） */
 const CATEGORIES = {
@@ -60,20 +62,12 @@ const CHART_COLORS = {
    Google Apps Script Web アプリとの HTTP 通信
    ============================================= */
 const GasAPI = {
-  getUrl() {
-    return localStorage.getItem(GAS_URL_KEY) || '';
-  },
-
-  setUrl(url) {
-    localStorage.setItem(GAS_URL_KEY, url.trim());
-  },
-
   isConfigured() {
-    return !!this.getUrl();
+    return typeof GAS_URL === 'string' && GAS_URL.length > 0 && !GAS_URL.includes('★');
   },
 
   async _post(body) {
-    const res = await fetch(this.getUrl(), {
+    const res = await fetch(GAS_URL, {
       method:   'POST',
       headers:  { 'Content-Type': 'text/plain;charset=UTF-8' },
       body:     JSON.stringify(body),
@@ -86,7 +80,7 @@ const GasAPI = {
   },
 
   async fetchAll() {
-    const res = await fetch(`${this.getUrl()}?action=getAll`, { redirect: 'follow' });
+    const res = await fetch(`${GAS_URL}?action=getAll`, { redirect: 'follow' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
@@ -164,7 +158,7 @@ const Storage = {
 const Data = {
   /** 取引を追加（GAS優先・成功後にlocalStorageを更新） */
   async add(transaction) {
-    if (!GasAPI.isConfigured()) throw new Error('GAS URLが設定されていません。設定タブで設定してください。');
+    if (!GasAPI.isConfigured()) throw new Error('GAS URLが設定されていません。');
     const record = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       ...transaction,
@@ -179,7 +173,7 @@ const Data = {
 
   /** ID で更新（GAS優先・成功後にlocalStorageを更新） */
   async update(updated) {
-    if (!GasAPI.isConfigured()) throw new Error('GAS URLが設定されていません。設定タブで設定してください。');
+    if (!GasAPI.isConfigured()) throw new Error('GAS URLが設定されていません。');
     const list = Storage.getTransactions();
     const idx  = list.findIndex(t => t.id === updated.id);
     if (idx === -1) throw new Error('取引が見つかりません');
@@ -192,7 +186,7 @@ const Data = {
 
   /** ID で削除（GAS優先・成功後にlocalStorageを更新） */
   async remove(id) {
-    if (!GasAPI.isConfigured()) throw new Error('GAS URLが設定されていません。設定タブで設定してください。');
+    if (!GasAPI.isConfigured()) throw new Error('GAS URLが設定されていません。');
     await GasAPI.deleteTransaction(id); // 失敗時は例外をスロー
     const list = Storage.getTransactions().filter(t => t.id !== id);
     Storage.saveTransactions(list);
@@ -816,59 +810,6 @@ const UI = {
   /* ─── 設定タブ ────────────────────────── */
 
   renderSettings() {
-    if (!document.getElementById('gasUrlSection')) {
-      const settingsTab = document.getElementById('tab-settings');
-      const section = document.createElement('div');
-      section.id        = 'gasUrlSection';
-      section.className = 'card';
-      section.style.cssText = 'margin-bottom:16px;';
-      section.innerHTML = `
-        <h3 class="card-title">🔗 Google スプレッドシート連携</h3>
-        <p style="font-size:13px;color:#6B7280;margin-bottom:12px;line-height:1.6">
-          GAS Web アプリの URL を設定すると、データがスプレッドシートにリアルタイムで保存されます。<br>
-          オフライン中は入力・編集・削除ができません。オンライン環境でご利用ください。
-        </p>
-        <div class="form-group">
-          <label class="form-label" for="gasUrl">GAS Web アプリ URL</label>
-          <input type="url" id="gasUrl" class="form-input"
-            placeholder="https://script.google.com/macros/s/..."
-            style="font-size:12px;" />
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-          <button type="button" id="saveGasUrl" class="btn btn-primary" style="flex:1;min-width:120px;">
-            URL を保存
-          </button>
-          <button type="button" id="testGasUrl" class="btn btn-secondary" style="flex:1;min-width:120px;">
-            接続テスト
-          </button>
-        </div>
-        <p id="gasUrlStatus" class="form-message" style="display:none;margin-top:8px;"></p>
-      `;
-      settingsTab.insertBefore(section, settingsTab.firstChild);
-
-      document.getElementById('saveGasUrl').addEventListener('click', () => {
-        const url = document.getElementById('gasUrl').value.trim();
-        if (!url) { UI._showMsg('gasUrlStatus', '⚠️ URL を入力してください', 'error'); return; }
-        GasAPI.setUrl(url);
-        UI._showMsg('gasUrlStatus', '✅ URL を保存しました', 'success');
-      });
-
-      document.getElementById('testGasUrl').addEventListener('click', async () => {
-        const url = document.getElementById('gasUrl').value.trim();
-        if (!url) { UI._showMsg('gasUrlStatus', '⚠️ URL を入力してください', 'error'); return; }
-        GasAPI.setUrl(url);
-        UI._showMsg('gasUrlStatus', '🔄 接続テスト中...', 'success');
-        try {
-          const data  = await GasAPI.fetchAll();
-          const count = Array.isArray(data.transactions) ? data.transactions.length : '?';
-          UI._showMsg('gasUrlStatus', `✅ 接続成功！（取引データ ${count} 件）`, 'success');
-        } catch (e) {
-          UI._showMsg('gasUrlStatus', `❌ 接続に失敗しました: ${e.message}`, 'error');
-        }
-      });
-    }
-
-    document.getElementById('gasUrl').value = GasAPI.getUrl();
     const s = Storage.getSettings();
     document.getElementById('businessName').value = s.businessName || '';
     document.getElementById('initialCash').value  = s.initialCash  || '';
@@ -1479,8 +1420,8 @@ async function init() {
   UI.renderDashboard();
 
   if (!GasAPI.isConfigured()) {
-    // GAS URL未設定時は設定タブへ誘導するトーストを表示
-    UI._showToast('⚙️ 設定タブで GAS Web アプリ URL を設定してください', 'warn');
+    // GAS URL未設定（app.js の GAS_URL 定数を設定してください）
+    UI._showToast('⚠️ GAS URL が未設定です。app.js の GAS_URL 定数を設定してください。', 'warn');
     return;
   }
 
