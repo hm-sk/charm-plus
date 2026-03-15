@@ -25,8 +25,7 @@ const STORAGE_KEY   = 'salon_kaikei_v1_transactions';
 const SETTINGS_KEY  = 'salon_kaikei_v1_settings';
 const TEMPLATES_KEY = 'salon_kaikei_v1_templates';
 
-// ★ GAS Web アプリ URL をここに貼り付けてください
-const GAS_URL = '★ここにGAS URLを貼り付けてください★';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwPJ4vodIXXLiozy8HnytXyrSh6PpuqvKCUGpFS-I_Jm-e2HdWVtl_UuukUOeFtCwif/exec';
 
 /** 勘定科目マスター（青色申告決算書準拠） */
 const CATEGORIES = {
