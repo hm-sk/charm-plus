@@ -95,6 +95,17 @@ function getAll() {
   return { transactions, settings };
 }
 
+/** Sheets の Date オブジェクトを YYYY-MM-DD 文字列に変換 */
+function formatCellDate(val) {
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(val === undefined || val === null ? '' : val);
+}
+
 function readTransactions(sheet) {
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
@@ -105,7 +116,14 @@ function readTransactions(sheet) {
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const t   = {};
-    headers.forEach((h, j) => { t[h] = row[j] === undefined ? '' : String(row[j]); });
+    headers.forEach((h, j) => {
+      // date 列は必ず YYYY-MM-DD 形式で返す（Sheets の自動日付変換対策）
+      if (h === 'date' || h === 'createdAt' || h === 'deletedAt') {
+        t[h] = row[j] instanceof Date ? formatCellDate(row[j]) : String(row[j] ?? '');
+      } else {
+        t[h] = row[j] === undefined || row[j] === null ? '' : String(row[j]);
+      }
+    });
 
     // 論理削除済みは除外
     if (t.deletedAt && t.deletedAt !== '') continue;

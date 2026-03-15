@@ -254,14 +254,18 @@ const Data = {
   /** 年月で絞り込み */
   getByYearMonth(year, month) {
     return this.getAll().filter(t => {
-      const d = new Date(t.date);
-      return d.getFullYear() === year && (d.getMonth() + 1) === month;
+      if (!t.date) return false;
+      const [y, m] = t.date.substring(0, 7).split('-').map(Number);
+      return y === year && m === month;
     });
   },
 
   /** 年で絞り込み */
   getByYear(year) {
-    return this.getAll().filter(t => new Date(t.date).getFullYear() === year);
+    return this.getAll().filter(t => {
+      if (!t.date) return false;
+      return Number(t.date.substring(0, 4)) === year;
+    });
   },
 
   /** ID で1件取得 */
@@ -518,7 +522,10 @@ const Calculator = {
 
   getAvailableYears() {
     const years = new Set(
-      Data.getAll().map(t => new Date(t.date).getFullYear())
+      Data.getAll()
+        .filter(t => t.date && t.date.length >= 4)
+        .map(t => Number(t.date.substring(0, 4)))
+        .filter(y => !isNaN(y))
     );
     years.add(new Date().getFullYear());
     return [...years].sort((a, b) => b - a);
@@ -754,8 +761,10 @@ const UI = {
     const months = new Set();
     const tags   = new Set();
     Data.getAll().forEach(t => {
-      const d = new Date(t.date);
-      months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      // 文字列から直接 YYYY-MM を取り出す（タイムゾーン問題を回避）
+      if (t.date && t.date.length >= 7) {
+        months.add(t.date.substring(0, 7));
+      }
       if (Array.isArray(t.tags)) t.tags.forEach(tag => tag && tags.add(tag));
     });
 
@@ -806,11 +815,7 @@ const UI = {
     const tag      = tagSel ? tagSel.value : '';
 
     if (month) {
-      const [y, m] = month.split('-').map(Number);
-      list = list.filter(t => {
-        const d = new Date(t.date);
-        return d.getFullYear() === y && (d.getMonth() + 1) === m;
-      });
+      list = list.filter(t => t.date && t.date.startsWith(month));
     }
     if (type)     list = list.filter(t => t.type === type);
     if (category) list = list.filter(t => t.category === category);
@@ -2648,6 +2653,10 @@ async function init() {
       // フォームの支払方法・科目も更新
       UI._rebuildPaymentMethodOptions();
       UI._rebuildCategoryOptions();
+      // 収支一覧が表示中なら再描画（GAS同期後に最新データを反映）
+      if (document.getElementById('tab-list')?.classList.contains('active')) {
+        UI.renderList();
+      }
     }
   }
 }
