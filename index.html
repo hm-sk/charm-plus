@@ -35,6 +35,10 @@
       <span class="nav-icon" aria-hidden="true">📈</span>
       <span>集計</span>
     </button>
+    <button class="nav-btn" data-tab="ledger" aria-label="帳簿">
+      <span class="nav-icon" aria-hidden="true">📒</span>
+      <span>帳簿</span>
+    </button>
     <button class="nav-btn" data-tab="settings" aria-label="設定">
       <span class="nav-icon" aria-hidden="true">⚙️</span>
       <span>設定</span>
@@ -118,6 +122,11 @@
             </div>
           </div>
 
+          <!-- 家事按分 表示エリア（支出かつ按分設定がある科目の場合のみ表示） -->
+          <div id="allocationDisplay" style="display:none;background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px;color:#92400E;">
+            <span id="allocationText"></span>
+          </div>
+
           <div class="form-group">
             <label for="inputCategory">
               勘定科目 <small>（青色申告の科目名）</small>
@@ -135,7 +144,7 @@
 
           <div class="form-group">
             <label>支払い方法</label>
-            <div class="payment-toggle" role="group">
+            <div class="payment-toggle" role="group" id="paymentMethodGroup">
               <label class="payment-option" id="payOptCash">
                 <input type="radio" name="paymentMethod" value="cash" checked>
                 <span>💴 現金</span>
@@ -144,6 +153,29 @@
                 <input type="radio" name="paymentMethod" value="card">
                 <span>💳 カード／振込</span>
               </label>
+            </div>
+          </div>
+
+          <!-- タグ入力 -->
+          <div class="form-group">
+            <label for="inputTags">タグ <small>（任意・複数はカンマ区切り）</small></label>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <input type="text" id="inputTags" placeholder="例：消耗品,定期購入" maxlength="200">
+              <div id="tagSuggestions" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+            </div>
+          </div>
+
+          <!-- 領収書添付 -->
+          <div class="form-group">
+            <label for="inputReceipt">領収書・レシート <small>（任意）</small></label>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <input type="file" id="inputReceipt" accept="image/*" capture="environment"
+                style="font-size:13px;padding:6px;border:1px solid #E5E7EB;border-radius:8px;background:white;">
+              <div id="receiptPreview" style="display:none;">
+                <img id="receiptPreviewImg" style="max-width:120px;max-height:120px;border-radius:6px;border:1px solid #E5E7EB;" alt="領収書プレビュー">
+                <span id="receiptPreviewName" style="font-size:12px;color:#6B7280;margin-left:8px;"></span>
+              </div>
+              <div id="receiptUploadStatus" style="font-size:12px;color:#6B7280;"></div>
             </div>
           </div>
 
@@ -174,6 +206,9 @@
           <select id="filterCategory" class="filter-select" aria-label="科目で絞り込み">
             <option value="">科目すべて</option>
           </select>
+          <select id="filterTag" class="filter-select" aria-label="タグで絞り込み">
+            <option value="">タグすべて</option>
+          </select>
         </div>
 
         <div id="transactionList" class="transaction-list"></div>
@@ -203,7 +238,7 @@
           <div class="card-value income-text" id="annualIncome">¥0</div>
         </div>
         <div class="card expense-card">
-          <div class="card-label">年間経費合計</div>
+          <div class="card-label">年間経費合計<small style="font-size:11px;display:block;font-weight:normal;margin-top:2px;">按分後</small></div>
           <div class="card-value expense-text" id="annualExpense">¥0</div>
         </div>
         <div class="card">
@@ -221,7 +256,7 @@
               <tr>
                 <th scope="col">月</th>
                 <th scope="col">売上</th>
-                <th scope="col">経費</th>
+                <th scope="col">経費<small>（按分後）</small></th>
                 <th scope="col">差引</th>
               </tr>
             </thead>
@@ -232,7 +267,7 @@
 
       <!-- 勘定科目別テーブル -->
       <div class="card">
-        <h2 class="section-title">勘定科目別 経費内訳</h2>
+        <h2 class="section-title">勘定科目別 経費内訳<small style="font-size:12px;font-weight:normal;color:#6B7280;margin-left:8px;">按分後</small></h2>
         <div class="table-wrapper">
           <table class="summary-table" aria-label="勘定科目別経費">
             <thead>
@@ -245,6 +280,90 @@
             <tbody id="categoryTableBody"></tbody>
           </table>
         </div>
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════
+         帳簿 タブ
+    ══════════════════════════════════════ -->
+    <section id="tab-ledger" class="tab-content" aria-label="帳簿">
+
+      <!-- 帳簿フィルター -->
+      <div class="card filter-card" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <label for="ledgerYear" style="white-space:nowrap;">表示年度：</label>
+        <select id="ledgerYear" class="filter-select" aria-label="表示年度"></select>
+        <select id="ledgerMonth" class="filter-select" aria-label="表示月">
+          <option value="">全月</option>
+          <option value="1">1月</option>
+          <option value="2">2月</option>
+          <option value="3">3月</option>
+          <option value="4">4月</option>
+          <option value="5">5月</option>
+          <option value="6">6月</option>
+          <option value="7">7月</option>
+          <option value="8">8月</option>
+          <option value="9">9月</option>
+          <option value="10">10月</option>
+          <option value="11">11月</option>
+          <option value="12">12月</option>
+        </select>
+      </div>
+
+      <!-- 仕訳帳 -->
+      <div class="card" id="journalCard">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+          <h2 class="section-title" style="margin:0;">
+            仕訳帳
+            <small style="font-size:12px;font-weight:normal;color:#6B7280;margin-left:6px;">（取引を複式簿記形式で表示）</small>
+          </h2>
+          <button id="printJournalBtn" class="btn btn-secondary" style="font-size:13px;padding:6px 14px;">🖨️ 印刷</button>
+        </div>
+        <div class="table-wrapper">
+          <table class="summary-table" id="journalTable" aria-label="仕訳帳">
+            <thead>
+              <tr>
+                <th scope="col">日付</th>
+                <th scope="col">内容</th>
+                <th scope="col">借方（お金が増えた側）</th>
+                <th scope="col">貸方（お金が出た側）</th>
+                <th scope="col">金額</th>
+              </tr>
+            </thead>
+            <tbody id="journalBody"></tbody>
+          </table>
+        </div>
+        <p id="journalEmpty" style="display:none;text-align:center;color:#9CA3AF;padding:20px;">記録がありません</p>
+      </div>
+
+      <!-- 総勘定元帳 -->
+      <div class="card" style="margin-top:16px;" id="generalLedgerCard">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+          <h2 class="section-title" style="margin:0;">
+            総勘定元帳
+            <small style="font-size:12px;font-weight:normal;color:#6B7280;margin-left:6px;">（科目別の取引履歴と残高推移）</small>
+          </h2>
+          <button id="printLedgerBtn" class="btn btn-secondary" style="font-size:13px;padding:6px 14px;">🖨️ 印刷</button>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="ledgerAccount" style="font-size:13px;color:#6B7280;margin-right:8px;">科目：</label>
+          <select id="ledgerAccount" class="filter-select" aria-label="総勘定元帳の科目を選択"></select>
+        </div>
+        <div class="table-wrapper">
+          <table class="summary-table" id="ledgerTable" aria-label="総勘定元帳">
+            <thead>
+              <tr>
+                <th scope="col">日付</th>
+                <th scope="col">内容</th>
+                <th scope="col">借方（増加）</th>
+                <th scope="col">貸方（減少）</th>
+                <th scope="col">残高</th>
+              </tr>
+            </thead>
+            <tbody id="ledgerBody"></tbody>
+          </table>
+        </div>
+        <p id="ledgerEmpty" style="display:none;text-align:center;color:#9CA3AF;padding:20px;">記録がありません</p>
       </div>
 
     </section>
@@ -276,6 +395,16 @@
         <div id="settingsMessage" class="form-message" role="alert" aria-live="polite"></div>
       </div>
 
+      <!-- 家事按分設定（JSで注入） -->
+
+      <!-- 自動登録ルール（JSで注入） -->
+
+      <!-- 勘定科目管理（JSで注入） -->
+
+      <!-- 支払方法管理（JSで注入） -->
+
+      <!-- タグ管理（JSで注入） -->
+
       <div class="card danger-zone">
         <h2 class="section-title">データ管理</h2>
         <p class="danger-note">⚠️ 以下の操作は元に戻せません。十分ご注意ください。</p>
@@ -297,6 +426,17 @@
       <div class="modal-buttons">
         <button id="modalCancel" class="btn btn-secondary">キャンセル</button>
         <button id="modalConfirm" class="btn btn-danger">削除する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 領収書プレビューモーダル -->
+  <div id="receiptModal" class="modal" role="dialog" aria-modal="true" style="display:none;">
+    <div class="modal-content" style="max-width:480px;">
+      <h3 style="margin-bottom:12px;">📎 領収書</h3>
+      <div id="receiptModalContent" style="text-align:center;"></div>
+      <div class="modal-buttons" style="margin-top:16px;">
+        <button id="receiptModalClose" class="btn btn-secondary">閉じる</button>
       </div>
     </div>
   </div>
