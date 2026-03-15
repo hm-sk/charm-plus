@@ -27,6 +27,7 @@ const TEMPLATES_KEY    = 'salon_kaikei_v1_templates';
 const ALLOCATION_KEY   = 'salon_kaikei_v1_allocation';
 const AUTO_RULES_KEY   = 'salon_kaikei_v1_auto_rules';
 const MASTER_KEY       = 'salon_kaikei_v1_master';
+const CUSTOMERS_KEY    = 'charm_plus_customers';
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwPJ4vodIXXLiozy8HnytXyrSh6PpuqvKCUGpFS-I_Jm-e2HdWVtl_UuukUOeFtCwif/exec';
 
@@ -115,6 +116,26 @@ const GasAPI = {
 
   async saveMaster(data) {
     return this._post({ action: 'saveMaster', data });
+  },
+
+  async getCustomers() {
+    const res = await fetch(`${GAS_URL}?action=getCustomers`, { redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    return json.customers || [];
+  },
+
+  async addCustomer(data) {
+    return this._post({ action: 'addCustomer', data });
+  },
+
+  async updateCustomer(data) {
+    return this._post({ action: 'updateCustomer', data });
+  },
+
+  async deleteCustomer(id) {
+    return this._post({ action: 'deleteCustomer', id });
   },
 
   /** 領収書画像をGoogle Driveにアップロードし、ファイルIDを返す */
@@ -738,6 +759,7 @@ const UI = {
     if (name === 'summary')   this.renderSummary();
     if (name === 'ledger')    this.renderLedger();
     if (name === 'settings')  this.renderSettings();
+    if (name === 'customers') CustomerUI.renderCustomers();
   },
 
   /* ─── ダッシュボード ─────────────────── */
@@ -2736,6 +2758,265 @@ const UI = {
 };
 
 /* =============================================
+   CustomerData モジュール
+   顧客データのローカルキャッシュ＋GAS同期
+   ============================================= */
+const CustomerData = {
+  getAll() {
+    try { return JSON.parse(localStorage.getItem(CUSTOMERS_KEY) || '[]'); } catch { return []; }
+  },
+
+  saveAll(list) {
+    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(list));
+  },
+
+  getById(id) {
+    return this.getAll().find(c => c.id === id) || null;
+  },
+
+  async add(data) {
+    const customer = {
+      id:           'cust_' + Date.now(),
+      createdAt:    new Date().toISOString().split('T')[0],
+      visitCount:   0,
+      totalSpend:   0,
+      lastVisit:    '',
+      ...data,
+    };
+    if (GasAPI.isConfigured()) await GasAPI.addCustomer(customer);
+    const list = this.getAll();
+    list.push(customer);
+    this.saveAll(list);
+    return customer;
+  },
+
+  async update(data) {
+    if (GasAPI.isConfigured()) await GasAPI.updateCustomer(data);
+    const list = this.getAll().map(c => c.id === data.id ? { ...c, ...data } : c);
+    this.saveAll(list);
+  },
+
+  async remove(id) {
+    if (GasAPI.isConfigured()) await GasAPI.deleteCustomer(id);
+    this.saveAll(this.getAll().filter(c => c.id !== id));
+  },
+
+  async loadFromGas() {
+    try {
+      const customers = await GasAPI.getCustomers();
+      this.saveAll(customers);
+      return true;
+    } catch (e) {
+      console.warn('[CustomerData] GAS load failed:', e.message);
+      return false;
+    }
+  },
+};
+
+/* =============================================
+   CustomerUI モジュール
+   顧客タブの描画・検索・追加/編集
+   ============================================= */
+const CustomerUI = {
+  _editingId: null,
+
+  init() {
+    // 検索
+    document.getElementById('customerSearch').addEventListener('input', e => {
+      this._renderList(e.target.value.trim());
+    });
+
+    // 新規登録ボタン
+    document.getElementById('addCustomerBtn').addEventListener('click', () => {
+      this._openModal(null);
+    });
+
+    // モーダルキャンセル
+    document.getElementById('customerModalCancel').addEventListener('click', () => {
+      this._closeModal();
+    });
+    document.getElementById('customerModal').addEventListener('click', e => {
+      if (e.target === document.getElementById('customerModal')) this._closeModal();
+    });
+
+    // フォーム送信
+    document.getElementById('customerForm').addEventListener('submit', e => {
+      e.preventDefault();
+      this._submitForm();
+    });
+  },
+
+  renderCustomers() {
+    this._renderList(document.getElementById('customerSearch')?.value.trim() || '');
+  },
+
+  _renderList(query = '') {
+    const container = document.getElementById('customerList');
+    if (!container) return;
+
+    let customers = CustomerData.getAll();
+
+    if (query) {
+      const q = query.toLowerCase();
+      customers = customers.filter(c =>
+        (c.name     || '').toLowerCase().includes(q) ||
+        (c.nameKana || '').toLowerCase().includes(q) ||
+        (c.phone    || '').includes(q)
+      );
+    }
+
+    // フリガナ→氏名 順にソート
+    customers.sort((a, b) =>
+      (a.nameKana || a.name || '').localeCompare(b.nameKana || b.name || '', 'ja')
+    );
+
+    if (!customers.length) {
+      container.innerHTML = `<p style="color:var(--text-light);font-size:14px;text-align:center;padding:40px 0;">${query ? '該当する顧客が見つかりません' : '顧客が登録されていません'}</p>`;
+      return;
+    }
+
+    container.innerHTML = customers.map(c => `
+      <div class="customer-card" data-id="${this._esc(c.id)}"
+        style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:white;
+               border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;
+               cursor:pointer;transition:border-color 0.15s,box-shadow 0.15s;">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--accent-dim);
+                    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+                    font-family:var(--font-serif);font-size:1.1rem;color:var(--accent);font-weight:700;">
+          ${this._esc((c.name || '？').charAt(0))}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.9rem;font-weight:700;color:var(--text);">${this._esc(c.name || '')}</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);">${this._esc(c.nameKana || '')}</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-top:2px;">${this._esc(c.phone || '')}</div>
+        </div>
+        <div style="text-align:right;font-size:0.72rem;color:var(--text-sub);flex-shrink:0;">
+          ${c.lastVisit ? `最終来店<br><span style="color:var(--text);font-weight:600;">${this._esc(c.lastVisit)}</span>` : '<span style="color:var(--text-light);">未来店</span>'}
+          <br><span style="margin-top:4px;display:inline-block;">来店 <strong>${c.visitCount || 0}</strong> 回</span>
+        </div>
+        <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;">
+          <button class="cust-edit-btn edit-btn" data-id="${this._esc(c.id)}"
+            style="background:none;border:1px solid var(--border-normal);border-radius:var(--radius-xs);
+                   padding:3px 10px;font-size:11px;cursor:pointer;color:var(--text);font-family:var(--font-sans);">編集</button>
+          <button class="cust-del-btn delete-btn" data-id="${this._esc(c.id)}"
+            style="background:none;border:1px solid #FECACA;border-radius:var(--radius-xs);
+                   padding:3px 10px;font-size:11px;cursor:pointer;color:#EF4444;font-family:var(--font-sans);">削除</button>
+        </div>
+      </div>`).join('');
+
+    container.querySelectorAll('.cust-edit-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        this._openModal(btn.dataset.id);
+      });
+    });
+
+    container.querySelectorAll('.cust-del-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        this._confirmDelete(btn.dataset.id);
+      });
+    });
+  },
+
+  _openModal(id) {
+    this._editingId = id;
+    const isEdit = !!id;
+    document.getElementById('customerModalTitle').textContent = isEdit ? '顧客情報を編集' : '顧客を登録する';
+    document.getElementById('customerModalSave').textContent = isEdit ? '更新する' : '保存する';
+    UI._showMsg('customerFormMsg', '', '');
+    document.getElementById('customerFormMsg').style.display = 'none';
+
+    if (isEdit) {
+      const c = CustomerData.getById(id);
+      if (!c) return;
+      document.getElementById('cName').value         = c.name        || '';
+      document.getElementById('cNameKana').value     = c.nameKana    || '';
+      document.getElementById('cPhone').value        = c.phone       || '';
+      document.getElementById('cEmail').value        = c.email       || '';
+      document.getElementById('cBirthday').value     = c.birthday    || '';
+      document.getElementById('cTags').value         = c.tags        || '';
+      document.getElementById('cAllergyNotes').value = c.allergyNotes || '';
+      document.getElementById('cMemo').value         = c.memo        || '';
+    } else {
+      document.getElementById('customerForm').reset();
+    }
+
+    document.getElementById('customerModal').style.display = 'flex';
+    document.getElementById('cName').focus();
+  },
+
+  _closeModal() {
+    document.getElementById('customerModal').style.display = 'none';
+    this._editingId = null;
+  },
+
+  async _submitForm() {
+    const name = document.getElementById('cName').value.trim();
+    if (!name) {
+      UI._showMsg('customerFormMsg', '⚠️ 氏名を入力してください', 'error');
+      return;
+    }
+
+    const data = {
+      name:         name,
+      nameKana:     document.getElementById('cNameKana').value.trim(),
+      phone:        document.getElementById('cPhone').value.trim(),
+      email:        document.getElementById('cEmail').value.trim(),
+      birthday:     document.getElementById('cBirthday').value.trim(),
+      tags:         document.getElementById('cTags').value.trim(),
+      allergyNotes: document.getElementById('cAllergyNotes').value.trim(),
+      memo:         document.getElementById('cMemo').value.trim(),
+    };
+
+    const saveBtn = document.getElementById('customerModalSave');
+    saveBtn.disabled = true;
+    saveBtn.textContent = '保存中...';
+
+    try {
+      if (this._editingId) {
+        await CustomerData.update({ id: this._editingId, ...data });
+        UI._showToast('✅ 顧客情報を更新しました', 'success');
+      } else {
+        await CustomerData.add(data);
+        UI._showToast('✅ 顧客を登録しました', 'success');
+      }
+      this._closeModal();
+      this.renderCustomers();
+    } catch (e) {
+      UI._showMsg('customerFormMsg', '⚠️ 保存に失敗しました: ' + e.message, 'error');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = this._editingId ? '更新する' : '保存する';
+    }
+  },
+
+  _confirmDelete(id) {
+    const c = CustomerData.getById(id);
+    if (!c) return;
+    document.getElementById('modalTitle').textContent   = '顧客を削除しますか？';
+    document.getElementById('modalMessage').textContent = `「${c.name}」を削除します。この操作は元に戻せません。`;
+    document.getElementById('modal').style.display      = 'flex';
+
+    const confirmBtn = document.getElementById('modalConfirm');
+    const newBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+    newBtn.addEventListener('click', async () => {
+      document.getElementById('modal').style.display = 'none';
+      await CustomerData.remove(id);
+      this.renderCustomers();
+      UI._showToast('🗑️ 顧客を削除しました', 'info');
+    });
+  },
+
+  _esc(str) {
+    const el = document.createElement('div');
+    el.textContent = String(str || '');
+    return el.innerHTML;
+  },
+};
+
+/* =============================================
    アプリ起動
    ============================================= */
 async function init() {
@@ -2748,6 +3029,7 @@ async function init() {
   UI.initSummaryYear();
   UI.initLedger();
   UI.initOfflineDetection();
+  CustomerUI.init();
 
   const settings = Storage.getSettings();
   if (settings.businessName && settings.businessName !== 'マイサロン') {
@@ -2768,6 +3050,7 @@ async function init() {
     const [loaded] = await Promise.all([
       Storage.loadFromGas(),
       Storage.loadMasterFromGas(),
+      CustomerData.loadFromGas(),
     ]);
     if (loaded) {
       UI.renderDashboard();

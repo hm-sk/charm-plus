@@ -13,6 +13,7 @@
 const SHEET_TRANSACTIONS = '取引';
 const SHEET_SETTINGS     = '設定';
 const SHEET_MASTER       = 'マスタ';
+const SHEET_CUSTOMERS    = '顧客';
 
 // ─────────────────────────────────────────
 //  エントリポイント
@@ -22,8 +23,9 @@ function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || 'getAll';
   try {
     let result;
-    if (action === 'getAll')    result = getAll();
-    else if (action === 'getMaster') result = getMaster();
+    if (action === 'getAll')         result = getAll();
+    else if (action === 'getMaster')    result = getMaster();
+    else if (action === 'getCustomers') result = getCustomers();
     else result = { error: '不明なアクション: ' + action };
     return jsonResponse(result);
   } catch (err) {
@@ -43,6 +45,9 @@ function doPost(e) {
     else if (action === 'saveSettings')      result = saveSettings(body.data);
     else if (action === 'saveMaster')        result = saveMaster(body.data);
     else if (action === 'uploadReceipt')     result = uploadReceipt(body);
+    else if (action === 'addCustomer')       result = addCustomer(body.data);
+    else if (action === 'updateCustomer')    result = updateCustomer(body.data);
+    else if (action === 'deleteCustomer')    result = deleteCustomer(body.id);
     else result = { error: '不明なアクション: ' + action };
 
     return jsonResponse(result);
@@ -76,6 +81,11 @@ function getOrCreateSheet(name) {
       sheet.appendRow(['key','value']);
     } else if (name === SHEET_MASTER) {
       sheet.appendRow(['key','value']);
+    } else if (name === SHEET_CUSTOMERS) {
+      sheet.appendRow([
+        'id','createdAt','name','nameKana','phone','email',
+        'birthday','allergyNotes','memo','lastVisit','visitCount','totalSpend','tags'
+      ]);
     }
   }
   return sheet;
@@ -320,4 +330,93 @@ function uploadReceipt(body) {
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
   return { success: true, fileId: file.getId() };
+}
+
+// ─────────────────────────────────────────
+//  顧客管理
+// ─────────────────────────────────────────
+
+function getCustomers() {
+  const sheet = getOrCreateSheet(SHEET_CUSTOMERS);
+  const data  = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { customers: [] };
+
+  const headers = data[0].map(String);
+  const result  = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const c   = {};
+    headers.forEach((h, j) => {
+      if (h === 'visitCount' || h === 'totalSpend') {
+        c[h] = Number(row[j]) || 0;
+      } else if (h === 'createdAt' || h === 'lastVisit') {
+        c[h] = row[j] instanceof Date ? formatCellDate(row[j]) : String(row[j] ?? '');
+      } else {
+        c[h] = row[j] === undefined || row[j] === null ? '' : String(row[j]);
+      }
+    });
+    if (c.id) result.push(c);
+  }
+  return { customers: result };
+}
+
+function addCustomer(data) {
+  const sheet = getOrCreateSheet(SHEET_CUSTOMERS);
+  sheet.appendRow([
+    data.id          || '',
+    data.createdAt   || new Date().toISOString(),
+    data.name        || '',
+    data.nameKana    || '',
+    data.phone       || '',
+    data.email       || '',
+    data.birthday    || '',
+    data.allergyNotes || '',
+    data.memo        || '',
+    data.lastVisit   || '',
+    Number(data.visitCount)  || 0,
+    Number(data.totalSpend)  || 0,
+    data.tags        || '',
+  ]);
+  return { success: true };
+}
+
+function updateCustomer(data) {
+  const sheet   = getOrCreateSheet(SHEET_CUSTOMERS);
+  const rows    = sheet.getDataRange().getValues();
+  const headers = rows[0].map(String);
+  const idIdx   = headers.indexOf('id');
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][idIdx]) === String(data.id)) {
+      const colMap = {};
+      headers.forEach((h, j) => { colMap[h] = j + 1; });
+
+      const fields = ['name','nameKana','phone','email','birthday','allergyNotes','memo','lastVisit','visitCount','totalSpend','tags'];
+      fields.forEach(f => {
+        if (colMap[f] && data[f] !== undefined) {
+          sheet.getRange(i + 1, colMap[f]).setValue(
+            (f === 'visitCount' || f === 'totalSpend') ? (Number(data[f]) || 0) : (data[f] || '')
+          );
+        }
+      });
+      return { success: true };
+    }
+  }
+  return { error: '顧客が見つかりません: ' + data.id };
+}
+
+function deleteCustomer(id) {
+  const sheet   = getOrCreateSheet(SHEET_CUSTOMERS);
+  const rows    = sheet.getDataRange().getValues();
+  const headers = rows[0].map(String);
+  const idIdx   = headers.indexOf('id');
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][idIdx]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  return { error: '顧客が見つかりません: ' + id };
 }

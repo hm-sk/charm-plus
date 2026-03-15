@@ -33,6 +33,10 @@
       <span class="nav-icon" aria-hidden="true">📋</span>
       <span>収支一覧</span>
     </button>
+    <button class="nav-btn" data-tab="customers" aria-label="顧客管理">
+      <span class="nav-icon" aria-hidden="true">👤</span>
+      <span>顧客</span>
+    </button>
     <button class="nav-btn" data-tab="summary" aria-label="集計">
       <span class="nav-icon" aria-hidden="true">📈</span>
       <span>集計</span>
@@ -379,6 +383,23 @@
     </section>
 
     <!-- ══════════════════════════════════════
+         顧客管理 タブ
+    ══════════════════════════════════════ -->
+    <section id="tab-customers" class="tab-content" aria-label="顧客管理">
+
+      <!-- ツールバー: 検索 + 新規登録 -->
+      <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;">
+        <input type="search" id="customerSearch" placeholder="名前・フリガナ・電話番号で検索"
+          style="flex:1;padding:10px 14px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);font-size:0.875rem;font-family:var(--font-sans);background:white;">
+        <button id="addCustomerBtn" class="btn btn-primary" style="white-space:nowrap;">＋ 新規登録</button>
+      </div>
+
+      <!-- 顧客一覧 (JSで注入) -->
+      <div id="customerList"></div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════
          設定 タブ
     ══════════════════════════════════════ -->
     <section id="tab-settings" class="tab-content" aria-label="設定">
@@ -448,6 +469,58 @@
       <div class="modal-buttons" style="margin-top:16px;">
         <button id="receiptModalClose" class="btn btn-secondary">閉じる</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 顧客 追加/編集 モーダル -->
+  <div id="customerModal" class="modal" role="dialog" aria-modal="true" style="display:none;">
+    <div class="modal-content" style="max-width:520px;width:100%;">
+      <h3 id="customerModalTitle" style="margin-bottom:20px;font-family:var(--font-serif);font-size:1.1rem;">顧客を登録する</h3>
+      <form id="customerForm" class="record-form" novalidate>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label for="cName">氏名 <span style="color:var(--expense);">*</span></label>
+            <input type="text" id="cName" placeholder="例：田中 花子" maxlength="30" required>
+          </div>
+          <div class="form-group">
+            <label for="cNameKana">フリガナ</label>
+            <input type="text" id="cNameKana" placeholder="例：タナカ ハナコ" maxlength="40">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label for="cPhone">電話番号</label>
+            <input type="tel" id="cPhone" placeholder="例：090-1234-5678" maxlength="20">
+          </div>
+          <div class="form-group">
+            <label for="cEmail">メールアドレス</label>
+            <input type="email" id="cEmail" placeholder="例：hanako@example.com" maxlength="80">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-group">
+            <label for="cBirthday">誕生日</label>
+            <input type="text" id="cBirthday" placeholder="例：1990-04-15" maxlength="10">
+          </div>
+          <div class="form-group">
+            <label for="cTags">タグ <small>（カンマ区切り）</small></label>
+            <input type="text" id="cTags" placeholder="例：VIP,紹介" maxlength="100">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="cAllergyNotes">アレルギー・注意事項</label>
+          <input type="text" id="cAllergyNotes" placeholder="例：ラテックスアレルギー" maxlength="200">
+        </div>
+        <div class="form-group">
+          <label for="cMemo">メモ</label>
+          <input type="text" id="cMemo" placeholder="自由メモ" maxlength="300">
+        </div>
+        <div id="customerFormMsg" class="form-message" role="alert" style="display:none;"></div>
+        <div class="modal-buttons" style="margin-top:8px;">
+          <button type="button" id="customerModalCancel" class="btn btn-secondary">キャンセル</button>
+          <button type="submit" id="customerModalSave" class="btn btn-primary">保存する</button>
+        </div>
+      </form>
     </div>
   </div>
 
