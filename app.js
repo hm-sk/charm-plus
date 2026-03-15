@@ -818,6 +818,17 @@ const UI = {
     document.getElementById('monthlyIncome').textContent  = Format.currency(income);
     document.getElementById('monthlyExpense').textContent = Format.currency(expense);
 
+    // 今月の予約売上見込み（confirmed の合計）
+    const yearMonth = new Date().toISOString().substring(0, 7);
+    const forecast = AppointmentData.getAll()
+      .filter(a => (a.status === 'confirmed' || a.status === 'pending') &&
+                   (a.dateTime || '').startsWith(yearMonth))
+      .reduce((sum, a) => sum + Number(a.price || 0), 0);
+    const forecastEl = document.getElementById('forecastIncome');
+    if (forecastEl) forecastEl.textContent = Format.currency(forecast);
+
+    this._renderTodaySchedule();
+
     const listEl = document.getElementById('recentList');
     listEl.innerHTML = '';
     const recent = Data.getAll().slice(0, 5);
@@ -829,6 +840,33 @@ const UI = {
 
     Charts.renderMonthly();
     Charts.renderCategory();
+  },
+
+  _renderTodaySchedule() {
+    const el = document.getElementById('todaySchedule');
+    if (!el) return;
+    const today = new Date().toISOString().split('T')[0];
+    const appts = AppointmentData.getByDate(today)
+      .filter(a => a.status === 'pending' || a.status === 'confirmed')
+      .sort((a, b) => (a.dateTime || '').localeCompare(b.dateTime || ''));
+
+    if (!appts.length) {
+      el.innerHTML = '<p style="text-align:center;color:var(--text-light);font-size:13px;padding:20px 0;">今日の予約はありません</p>';
+      return;
+    }
+    const badge = { pending: '🟡', confirmed: '🟢' };
+    el.innerHTML = appts.map(a => {
+      const time = (a.dateTime || '').substring(11, 16);
+      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <span style="font-family:var(--font-serif);font-size:1.1rem;font-weight:700;min-width:48px;">${time}</span>
+        <span style="font-size:14px;">${badge[a.status] || ''}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:14px;">${UI._esc(a.customerName || '')}</div>
+          <div style="font-size:12px;color:var(--text-sub);">${UI._esc(a.menuName || '')} ／ ¥${Number(a.price || 0).toLocaleString()}</div>
+        </div>
+        <span style="font-size:12px;color:var(--text-sub);flex-shrink:0;">${Number(a.duration || 0)}分</span>
+      </div>`;
+    }).join('');
   },
 
   /* ─── 収支一覧 ────────────────────────── */
@@ -1201,6 +1239,7 @@ const UI = {
     this._injectAutoRulesSection();
     this._injectMenuSection();
     this._injectBusinessHoursSection();
+    this._injectQrSection();
     this._injectCategorySection();
     this._injectPaymentMethodSection();
     this._injectTagSection();
@@ -1873,6 +1912,83 @@ const UI = {
       this._saveMasterToGas();
       this._showMsg('bhMsg', '✅ 営業時間設定を保存しました', 'success');
     });
+  },
+
+  /* ─── 予約フォームQRコード ─────────────────── */
+
+  _injectQrSection() {
+    if (document.getElementById('qrSection')) {
+      this._renderQrSection();
+      return;
+    }
+    const danger = document.querySelector('.danger-zone');
+    const section = document.createElement('div');
+    section.id        = 'qrSection';
+    section.className = 'card form-card';
+    section.style.cssText = 'margin-top:16px;';
+    danger.parentNode.insertBefore(section, danger);
+    this._renderQrSection();
+  },
+
+  _renderQrSection() {
+    const section = document.getElementById('qrSection');
+    if (!section) return;
+    const saved = Storage.getSettings().bookingUrl || '';
+    section.innerHTML = `
+      <h2 class="section-title">予約フォーム QRコード</h2>
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:14px;">
+        booking.html のURLを入力すると、ショップカード用QRコードを生成できます。
+      </p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="url" id="bookingUrlInput" value="${UI._esc(saved)}"
+          placeholder="https://example.com/booking.html"
+          style="flex:1;min-width:200px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);
+                 padding:8px 12px;font-size:13px;font-family:var(--font-sans);">
+        <button type="button" id="generateQrBtn" class="btn btn-primary">QR生成</button>
+        <button type="button" id="copyUrlBtn" class="btn btn-secondary"
+          style="border:1.5px solid var(--border-normal);background:none;color:var(--text);">URLコピー</button>
+      </div>
+      <div id="qrCanvas" style="margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:10px;"></div>
+    `;
+
+    document.getElementById('generateQrBtn').addEventListener('click', () => {
+      const url = document.getElementById('bookingUrlInput').value.trim();
+      if (!url) { UI._showToast('URLを入力してください', 'warn'); return; }
+      // 設定に保存
+      const s = Storage.getSettings();
+      Storage.saveSettings({ ...s, bookingUrl: url });
+      // QR生成
+      const container = document.getElementById('qrCanvas');
+      container.innerHTML = '';
+      const canvas = document.createElement('canvas');
+      container.appendChild(canvas);
+      if (typeof QRCode !== 'undefined') {
+        QRCode.toCanvas(canvas, url, { width: 200, margin: 2, color: { dark: '#1C1C1E', light: '#FFFFFF' } }, err => {
+          if (err) { container.innerHTML = '<p style="color:#EF4444;font-size:13px;">QR生成に失敗しました</p>'; }
+          else {
+            const dl = document.createElement('a');
+            dl.href = canvas.toDataURL('image/png');
+            dl.download = 'booking-qr.png';
+            dl.className = 'btn btn-secondary';
+            dl.style.cssText = 'border:1.5px solid var(--border-normal);background:none;color:var(--text);padding:6px 18px;border-radius:var(--radius-sm);font-size:13px;text-decoration:none;display:inline-block;';
+            dl.textContent = '📥 PNG保存';
+            container.appendChild(dl);
+          }
+        });
+      } else {
+        container.innerHTML = '<p style="font-size:13px;color:var(--text-sub);">QRライブラリの読み込み中です。ページを再読み込みしてください。</p>';
+      }
+    });
+
+    document.getElementById('copyUrlBtn').addEventListener('click', () => {
+      const url = document.getElementById('bookingUrlInput').value.trim();
+      if (!url) { UI._showToast('URLを入力してください', 'warn'); return; }
+      navigator.clipboard.writeText(url).then(() => UI._showToast('✅ URLをコピーしました', 'success'))
+        .catch(() => UI._showToast('コピーに失敗しました', 'warn'));
+    });
+
+    // 保存済みURLがあれば自動生成
+    if (saved) document.getElementById('generateQrBtn').click();
   },
 
   /** 支払方法の radio ボタンを動的に再構築 */
@@ -3089,6 +3205,44 @@ const AppointmentUI = {
     });
   },
 
+  // 予約完了時: 売上トランザクションをローカル＋GASに自動作成
+  async _autoRecordTransaction(appt) {
+    const dateOnly = (appt.dateTime || '').substring(0, 10) || new Date().toISOString().split('T')[0];
+    const record = {
+      id:        `appt_${appt.id}_${Date.now()}`,
+      date:      dateOnly,
+      type:      'income',
+      amount:    Number(appt.price || 0),
+      category:  '売上',
+      memo:      `${appt.menuName || 'メニュー'}（予約 #${appt.id.substring(0, 8)}）`,
+      paymentMethod: Master.getPaymentMethods()[0] || '現金',
+      tags:      [],
+      appointmentId: appt.id,
+      createdAt: new Date().toISOString(),
+    };
+    // GAS同期（設定済みの場合のみ、失敗してもローカル保存は続行）
+    if (GasAPI.isConfigured()) {
+      try { await GasAPI.addTransaction(record); } catch(e) { console.warn('[AutoRecord] GAS sync failed:', e.message); }
+    }
+    const list = Storage.getTransactions();
+    list.unshift(record);
+    Storage.saveTransactions(list);
+  },
+
+  // 予約完了時: 顧客の来店回数・最終来店日・累計売上を更新
+  async _updateCustomerStats(appt) {
+    if (!appt.customerId) return;
+    const cust = CustomerData.getById(appt.customerId);
+    if (!cust) return;
+    const dateOnly = (appt.dateTime || '').substring(0, 10) || new Date().toISOString().split('T')[0];
+    await CustomerData.update({
+      ...cust,
+      lastVisit:  dateOnly,
+      visitCount: (cust.visitCount || 0) + 1,
+      totalSpend: (cust.totalSpend || 0) + Number(appt.price || 0),
+    });
+  },
+
   async _handleAction(id, action) {
     const statusMap = { confirm: 'confirmed', complete: 'completed', noshow: 'noshow', cancel: 'cancelled' };
     const labelMap  = { confirm: '確定', complete: '完了にする', noshow: '無断欠席（NC）にする', cancel: 'キャンセルにする' };
@@ -3110,8 +3264,19 @@ const AppointmentUI = {
       document.getElementById('modal').style.display = 'none';
       try {
         await AppointmentData.updateStatus(id, status);
+
+        // 完了時: 売上自動記録 + 顧客情報更新
+        if (action === 'complete') {
+          await this._autoRecordTransaction(appt);
+          await this._updateCustomerStats(appt);
+        }
+
         UI._showToast(`✅ 予約を${labelMap[action]}にしました`, 'success');
         this.renderAppointments();
+        // ダッシュボードが表示中なら再描画
+        if (document.getElementById('tab-dashboard')?.classList.contains('active')) {
+          UI.renderDashboard();
+        }
       } catch(e) {
         UI._showToast('⚠️ 更新に失敗しました: ' + e.message, 'warn');
       }

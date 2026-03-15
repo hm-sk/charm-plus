@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -81,6 +82,16 @@
           <div class="card-label">📉 今月の経費</div>
           <div class="card-value expense-text" id="monthlyExpense">¥0</div>
         </div>
+        <div class="card balance-card">
+          <div class="card-label">📅 今月の予約売上見込み</div>
+          <div class="card-value" id="forecastIncome">¥0</div>
+        </div>
+      </div>
+
+      <!-- 本日のスケジュール -->
+      <div class="card">
+        <h2 class="section-title">本日のスケジュール</h2>
+        <div id="todaySchedule"></div>
       </div>
 
       <!-- グラフ -->
