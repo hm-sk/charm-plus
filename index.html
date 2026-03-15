@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>サロン家計簿 - 収支管理</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- ヘッダー -->
+  <header class="header">
+    <div class="header-inner">
+      <h1 class="logo">💅 サロン家計簿</h1>
+      <span class="subtitle" id="headerSubtitle">青色申告対応 収支管理</span>
+    </div>
+  </header>
+
+  <!-- ナビゲーション -->
+  <nav class="nav" role="navigation" aria-label="メインメニュー">
+    <button class="nav-btn active" data-tab="dashboard" aria-label="ダッシュボード">
+      <span class="nav-icon" aria-hidden="true">📊</span>
+      <span>ダッシュボード</span>
+    </button>
+    <button class="nav-btn" data-tab="record" aria-label="記録する">
+      <span class="nav-icon" aria-hidden="true">✏️</span>
+      <span>記録する</span>
+    </button>
+    <button class="nav-btn" data-tab="list" aria-label="収支一覧">
+      <span class="nav-icon" aria-hidden="true">📋</span>
+      <span>収支一覧</span>
+    </button>
+    <button class="nav-btn" data-tab="summary" aria-label="集計">
+      <span class="nav-icon" aria-hidden="true">📈</span>
+      <span>集計</span>
+    </button>
+    <button class="nav-btn" data-tab="settings" aria-label="設定">
+      <span class="nav-icon" aria-hidden="true">⚙️</span>
+      <span>設定</span>
+    </button>
+  </nav>
+
+  <!-- メインコンテンツ -->
+  <main class="main">
+
+    <!-- ══════════════════════════════════════
+         ダッシュボード タブ
+    ══════════════════════════════════════ -->
+    <section id="tab-dashboard" class="tab-content active" aria-label="ダッシュボード">
+
+      <!-- 残高カード -->
+      <div class="card-grid">
+        <div class="card balance-card">
+          <div class="card-label">💴 現金残高</div>
+          <div class="card-value" id="cashBalance">¥0</div>
+        </div>
+        <div class="card balance-card">
+          <div class="card-label">🏦 預金残高</div>
+          <div class="card-value" id="bankBalance">¥0</div>
+        </div>
+        <div class="card income-card">
+          <div class="card-label">📈 今月の売上</div>
+          <div class="card-value income-text" id="monthlyIncome">¥0</div>
+        </div>
+        <div class="card expense-card">
+          <div class="card-label">📉 今月の経費</div>
+          <div class="card-value expense-text" id="monthlyExpense">¥0</div>
+        </div>
+      </div>
+
+      <!-- グラフ -->
+      <div class="chart-section">
+        <div class="card chart-card">
+          <h2 class="section-title">月別 収支グラフ</h2>
+          <div class="chart-wrapper">
+            <canvas id="monthlyChart" aria-label="月別収支グラフ" role="img"></canvas>
+          </div>
+        </div>
+        <div class="card chart-card">
+          <h2 class="section-title">経費の内訳（今月）</h2>
+          <div class="chart-wrapper">
+            <canvas id="categoryChart" aria-label="経費内訳グラフ" role="img"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- 最近の記録 -->
+      <div class="card">
+        <h2 class="section-title">最近の記録</h2>
+        <div id="recentList" class="transaction-list"></div>
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════
+         記録する タブ
+    ══════════════════════════════════════ -->
+    <section id="tab-record" class="tab-content" aria-label="収支を記録する">
+      <div class="card form-card">
+        <h2 class="section-title">収支を記録する</h2>
+
+        <!-- 収入/支出 切り替え -->
+        <div class="type-toggle" role="group" aria-label="収入または支出">
+          <button class="type-btn active" data-type="income">💰 収入（売上）</button>
+          <button class="type-btn" data-type="expense">💸 支出（経費）</button>
+        </div>
+
+        <form id="recordForm" class="record-form" novalidate>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="inputDate">日付</label>
+              <input type="date" id="inputDate" required aria-required="true">
+            </div>
+            <div class="form-group">
+              <label for="inputAmount">金額（円）</label>
+              <input type="number" id="inputAmount" placeholder="例：5000" min="1" step="1" required aria-required="true">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="inputCategory">
+              勘定科目 <small>（青色申告の科目名）</small>
+            </label>
+            <select id="inputCategory" required aria-required="true">
+              <option value="">-- 科目を選んでください --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="inputDescription">内容・メモ</label>
+            <input type="text" id="inputDescription"
+              placeholder="例：ジェルネイル施術 3名分" maxlength="100" required aria-required="true">
+          </div>
+
+          <div class="form-group">
+            <label>支払い方法</label>
+            <div class="payment-toggle" role="group">
+              <label class="payment-option" id="payOptCash">
+                <input type="radio" name="paymentMethod" value="cash" checked>
+                <span>💴 現金</span>
+              </label>
+              <label class="payment-option" id="payOptCard">
+                <input type="radio" name="paymentMethod" value="card">
+                <span>💳 カード／振込</span>
+              </label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-full">記録する</button>
+        </form>
+
+        <div id="formMessage" class="form-message" role="alert" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
+         収支一覧 タブ
+    ══════════════════════════════════════ -->
+    <section id="tab-list" class="tab-content" aria-label="収支一覧">
+      <div class="card">
+        <h2 class="section-title">収支一覧</h2>
+
+        <!-- フィルター -->
+        <div class="filter-bar" role="search" aria-label="絞り込み">
+          <select id="filterMonth" class="filter-select" aria-label="月で絞り込み">
+            <option value="">全期間</option>
+          </select>
+          <select id="filterType" class="filter-select" aria-label="種類で絞り込み">
+            <option value="">収入・支出すべて</option>
+            <option value="income">収入のみ</option>
+            <option value="expense">支出のみ</option>
+          </select>
+          <select id="filterCategory" class="filter-select" aria-label="科目で絞り込み">
+            <option value="">科目すべて</option>
+          </select>
+        </div>
+
+        <div id="transactionList" class="transaction-list"></div>
+        <div id="listEmpty" class="empty-state" style="display:none;" aria-live="polite">
+          <p>📭</p>
+          <p>記録がありません</p>
+          <p class="empty-sub">「記録する」タブから収支を入力してください</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
+         集計 タブ
+    ══════════════════════════════════════ -->
+    <section id="tab-summary" class="tab-content" aria-label="集計">
+
+      <!-- 年度選択 -->
+      <div class="card filter-card">
+        <label for="summaryYear">集計年度：</label>
+        <select id="summaryYear" class="filter-select" aria-label="集計する年を選択"></select>
+      </div>
+
+      <!-- 年間合計 -->
+      <div class="card-grid">
+        <div class="card income-card">
+          <div class="card-label">年間売上合計</div>
+          <div class="card-value income-text" id="annualIncome">¥0</div>
+        </div>
+        <div class="card expense-card">
+          <div class="card-label">年間経費合計</div>
+          <div class="card-value expense-text" id="annualExpense">¥0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">所得（売上－経費）</div>
+          <div class="card-value" id="annualProfit">¥0</div>
+        </div>
+      </div>
+
+      <!-- 月別内訳テーブル -->
+      <div class="card">
+        <h2 class="section-title">月別 収支一覧</h2>
+        <div class="table-wrapper">
+          <table class="summary-table" aria-label="月別収支">
+            <thead>
+              <tr>
+                <th scope="col">月</th>
+                <th scope="col">売上</th>
+                <th scope="col">経費</th>
+                <th scope="col">差引</th>
+              </tr>
+            </thead>
+            <tbody id="monthlyTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 勘定科目別テーブル -->
+      <div class="card">
+        <h2 class="section-title">勘定科目別 経費内訳</h2>
+        <div class="table-wrapper">
+          <table class="summary-table" aria-label="勘定科目別経費">
+            <thead>
+              <tr>
+                <th scope="col">勘定科目</th>
+                <th scope="col">合計金額</th>
+                <th scope="col">割合</th>
+              </tr>
+            </thead>
+            <tbody id="categoryTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════
+         設定 タブ
+    ══════════════════════════════════════ -->
+    <section id="tab-settings" class="tab-content" aria-label="設定">
+
+      <div class="card form-card">
+        <h2 class="section-title">初期設定</h2>
+        <form id="settingsForm" class="record-form" novalidate>
+          <div class="form-group">
+            <label for="businessName">屋号・お店の名前</label>
+            <input type="text" id="businessName" placeholder="例：ネイルサロン〇〇" maxlength="50">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="initialCash">現金の初期残高（円）</label>
+              <input type="number" id="initialCash" placeholder="例：50000" min="0" step="1">
+            </div>
+            <div class="form-group">
+              <label for="initialBank">預金の初期残高（円）</label>
+              <input type="number" id="initialBank" placeholder="例：300000" min="0" step="1">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">保存する</button>
+        </form>
+        <div id="settingsMessage" class="form-message" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div class="card danger-zone">
+        <h2 class="section-title">データ管理</h2>
+        <p class="danger-note">⚠️ 以下の操作は元に戻せません。十分ご注意ください。</p>
+        <button id="exportData" class="btn btn-secondary">📥 データをバックアップ（JSON）</button>
+        <button id="deleteAllData" class="btn btn-danger">🗑️ すべてのデータを削除する</button>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ══════════════════════════════════════
+       削除確認モーダル
+  ══════════════════════════════════════ -->
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" style="display:none;">
+    <div class="modal-content">
+      <h3 id="modalTitle">本当に削除しますか？</h3>
+      <p id="modalMessage"></p>
+      <div class="modal-buttons">
+        <button id="modalCancel" class="btn btn-secondary">キャンセル</button>
+        <button id="modalConfirm" class="btn btn-danger">削除する</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

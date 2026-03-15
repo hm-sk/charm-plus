@@ -1,0 +1,746 @@
+/* =============================================
+   サロン家計簿 - スタイルシート
+   Version: 1.0.0 (Phase 1)
+   ============================================= */
+
+/* === リセット & 基本設定 === */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* カラーパレット */
+  --primary:        #E91E8C;
+  --primary-hover:  #C2185B;
+  --primary-light:  #FCE4EC;
+  --primary-dim:    rgba(233, 30, 140, 0.1);
+
+  --income:         #10B981;
+  --income-light:   #D1FAE5;
+  --expense:        #EF4444;
+  --expense-light:  #FEE2E2;
+
+  --bg:             #FFF8FC;
+  --card-bg:        #FFFFFF;
+  --border:         #F3E5F5;
+  --border-normal:  #E5E7EB;
+
+  --text:           #1F2937;
+  --text-sub:       #6B7280;
+  --text-light:     #9CA3AF;
+
+  --shadow:         0 2px 8px rgba(233, 30, 140, 0.08);
+  --shadow-hover:   0 4px 16px rgba(233, 30, 140, 0.14);
+
+  --radius:         14px;
+  --radius-sm:      8px;
+  --radius-xs:      5px;
+}
+
+body {
+  font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI',
+               'Meiryo', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-bottom: 24px;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+/* =============================================
+   ヘッダー
+   ============================================= */
+.header {
+  background: linear-gradient(135deg, var(--primary) 0%, #FF6EB4 100%);
+  color: white;
+  padding: 14px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  box-shadow: 0 2px 12px rgba(233, 30, 140, 0.3);
+}
+
+.header-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  font-size: 0.7rem;
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.22);
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+}
+
+/* =============================================
+   ナビゲーション
+   ============================================= */
+.nav {
+  display: flex;
+  background: white;
+  border-bottom: 2px solid var(--border);
+  overflow-x: auto;
+  position: sticky;
+  top: 53px;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar { display: none; }
+
+.nav-btn {
+  flex: 1;
+  min-width: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 9px 6px 7px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-sub);
+  font-size: 0.65rem;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+}
+
+.nav-btn .nav-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.nav-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 700;
+}
+
+.nav-btn:hover:not(.active) {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+/* =============================================
+   メインコンテンツ
+   ============================================= */
+.main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px 16px 40px;
+}
+
+/* =============================================
+   タブコンテンツ
+   ============================================= */
+.tab-content {
+  display: none;
+  animation: fadeIn 0.2s ease;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =============================================
+   カード
+   ============================================= */
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+/* ４枚グリッド */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.income-card  { border-left: 4px solid var(--income); }
+.expense-card { border-left: 4px solid var(--expense); }
+.balance-card { border-left: 4px solid var(--primary); }
+
+.card-label {
+  font-size: 0.72rem;
+  color: var(--text-sub);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.card-value {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.income-text  { color: var(--income); }
+.expense-text { color: var(--expense); }
+
+/* =============================================
+   セクションタイトル
+   ============================================= */
+.section-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--primary-light);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* =============================================
+   グラフ
+   ============================================= */
+.chart-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.chart-card { overflow: hidden; }
+
+.chart-wrapper {
+  position: relative;
+  height: 220px;
+}
+
+/* =============================================
+   取引アイテム
+   ============================================= */
+.transaction-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transaction-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-normal);
+  background: white;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.transaction-item:hover {
+  border-color: var(--primary-light);
+  box-shadow: var(--shadow-hover);
+}
+
+.transaction-type-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.transaction-type-dot.income  { background: var(--income); }
+.transaction-type-dot.expense { background: var(--expense); }
+
+.transaction-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.transaction-desc {
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.transaction-meta {
+  font-size: 0.7rem;
+  color: var(--text-sub);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+  align-items: center;
+}
+
+.tag {
+  background: #F3F4F6;
+  color: var(--text-sub);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.tag.cash { background: #FEF3C7; color: #92400E; }
+.tag.card { background: #DBEAFE; color: #1E40AF; }
+
+.transaction-amount {
+  font-size: 0.93rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: -0.01em;
+}
+.transaction-amount.income  { color: var(--income); }
+.transaction-amount.expense { color: var(--expense); }
+
+.delete-btn {
+  background: none;
+  border: none;
+  color: #D1D5DB;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 4px 6px;
+  border-radius: var(--radius-xs);
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.delete-btn:hover {
+  color: var(--expense);
+  background: var(--expense-light);
+}
+
+/* =============================================
+   フォーム（記録タブ）
+   ============================================= */
+.form-card {
+  max-width: 620px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 収入／支出 切り替えボタン */
+.type-toggle {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.type-btn {
+  flex: 1;
+  padding: 11px 8px;
+  border: 2px solid var(--border-normal);
+  border-radius: var(--radius-sm);
+  background: white;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.15s;
+  color: var(--text-sub);
+}
+
+.type-btn.active[data-type="income"] {
+  background: var(--income-light);
+  border-color: var(--income);
+  color: #065F46;
+}
+.type-btn.active[data-type="expense"] {
+  background: var(--expense-light);
+  border-color: var(--expense);
+  color: #991B1B;
+}
+.type-btn:hover:not(.active) {
+  background: #F9FAFB;
+  border-color: #D1D5DB;
+}
+
+.record-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.form-group label small {
+  font-weight: 400;
+  color: var(--text-sub);
+  font-size: 0.75rem;
+}
+
+.form-group input,
+.form-group select {
+  padding: 10px 12px;
+  border: 1.5px solid var(--border-normal);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: white;
+  color: var(--text);
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.form-group select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+
+/* 支払い方法 ラジオボタン */
+.payment-toggle {
+  display: flex;
+  gap: 12px;
+}
+
+.payment-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border: 1.5px solid var(--border-normal);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+  transition: all 0.15s;
+  color: var(--text-sub);
+  user-select: none;
+}
+
+.payment-option.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-hover);
+  font-weight: 700;
+}
+
+.payment-option input[type="radio"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* =============================================
+   ボタン
+   ============================================= */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), #FF6EB4);
+  color: white;
+  box-shadow: 0 4px 12px rgba(233, 30, 140, 0.3);
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(233, 30, 140, 0.4);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: #F3F4F6;
+  color: var(--text);
+  border: 1px solid var(--border-normal);
+}
+.btn-secondary:hover { background: #E5E7EB; }
+
+.btn-danger {
+  background: var(--expense);
+  color: white;
+}
+.btn-danger:hover { background: #DC2626; }
+
+.btn-full {
+  width: 100%;
+  padding: 13px;
+  font-size: 1rem;
+}
+
+/* =============================================
+   フォームメッセージ
+   ============================================= */
+.form-message {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  display: none;
+  font-weight: 500;
+}
+.form-message.success {
+  background: var(--income-light);
+  color: #065F46;
+  display: block;
+}
+.form-message.error {
+  background: var(--expense-light);
+  color: #991B1B;
+  display: block;
+}
+
+/* =============================================
+   フィルターバー
+   ============================================= */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  padding: 8px 10px;
+  border: 1.5px solid var(--border-normal);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-family: inherit;
+  background: white;
+  color: var(--text);
+  flex: 1;
+  min-width: 120px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.filter-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+
+/* =============================================
+   空状態
+   ============================================= */
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-light);
+}
+.empty-state p:first-child { font-size: 2.5rem; margin-bottom: 10px; }
+.empty-state p { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
+.empty-state .empty-sub { font-size: 0.8rem; font-weight: 400; color: var(--text-light); }
+
+/* =============================================
+   集計テーブル
+   ============================================= */
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.855rem;
+  min-width: 300px;
+}
+
+.summary-table th {
+  padding: 9px 14px;
+  background: var(--primary-light);
+  color: var(--primary-hover);
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+.summary-table th:first-child { text-align: left; }
+
+.summary-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid #F3F4F6;
+  text-align: right;
+  color: var(--text);
+}
+.summary-table td:first-child { text-align: left; font-weight: 600; }
+
+.summary-table tbody tr:last-child td { border-bottom: none; }
+.summary-table tbody tr:hover td { background: #FAFAFA; }
+
+.profit-positive { color: var(--income);  font-weight: 700; }
+.profit-negative { color: var(--expense); font-weight: 700; }
+
+/* =============================================
+   集計タブ：年度フィルターカード
+   ============================================= */
+.filter-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.filter-card label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+/* =============================================
+   設定タブ：危険ゾーン
+   ============================================= */
+.danger-zone {
+  border: 1px solid #FEE2E2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.danger-note {
+  font-size: 0.82rem;
+  color: #92400E;
+  background: #FEF3C7;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+}
+
+/* =============================================
+   モーダル
+   ============================================= */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(2px);
+}
+
+.modal-content {
+  background: white;
+  border-radius: var(--radius);
+  padding: 28px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.modal-content h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+.modal-content p {
+  font-size: 0.875rem;
+  color: var(--text-sub);
+  margin-bottom: 22px;
+  line-height: 1.6;
+}
+.modal-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* =============================================
+   レスポンシブ：タブレット以下
+   ============================================= */
+@media (max-width: 640px) {
+  .logo { font-size: 1.1rem; }
+  .subtitle { display: none; }
+
+  .card-value { font-size: 1.2rem; }
+
+  .chart-section {
+    grid-template-columns: 1fr;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .main { padding: 12px 12px 40px; }
+}
+
+/* =============================================
+   レスポンシブ：スマホ小さめ
+   ============================================= */
+@media (max-width: 420px) {
+  .card-grid { grid-template-columns: 1fr; }
+  .type-toggle { flex-direction: column; }
+  .payment-toggle { flex-direction: column; }
+  .filter-bar { flex-direction: column; }
+  .filter-select { min-width: unset; }
+  .modal-buttons { flex-direction: column-reverse; }
+  .modal-buttons .btn { width: 100%; }
+}
