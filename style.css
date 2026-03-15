@@ -1,7 +1,10 @@
 /* =============================================
-   サロン家計簿 - スタイルシート
-   Version: 1.0.0 (Phase 1)
+   Charm+ - スタイルシート
+   Version: 3.0.0 (Luxe Minimal)
    ============================================= */
+
+/* === Google Fonts === */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
 /* === リセット & 基本設定 === */
 *, *::before, *::after {
@@ -11,56 +14,71 @@
 }
 
 :root {
-  /* カラーパレット */
-  --primary:        #E91E8C;
-  --primary-hover:  #C2185B;
-  --primary-light:  #FCE4EC;
-  --primary-dim:    rgba(233, 30, 140, 0.1);
+  /* ─── ブランドカラー ─────────────────── */
+  --primary:       #1C1C1E;
+  --primary-light: #2C2C2E;
+  --accent:        #B8966E;
+  --accent-hover:  #A07D58;
+  --accent-light:  #F5EFE6;
+  --accent-dim:    rgba(184, 150, 110, 0.15);
 
-  --income:         #10B981;
-  --income-light:   #D1FAE5;
-  --expense:        #EF4444;
-  --expense-light:  #FEE2E2;
+  /* ─── 収支カラー ────────────────────── */
+  --income:        #6B9E78;
+  --income-hover:  #5A8867;
+  --income-light:  #EAF3EC;
+  --expense:       #B07070;
+  --expense-hover: #9A5E5E;
+  --expense-light: #F5EDED;
 
-  --bg:             #FFF8FC;
-  --card-bg:        #FFFFFF;
-  --border:         #F3E5F5;
-  --border-normal:  #E5E7EB;
+  /* ─── ニュートラル ──────────────────── */
+  --bg:            #FAFAF8;
+  --card-bg:       #FFFFFF;
+  --border:        #E8E5DF;
+  --border-normal: #E0DDD7;
+  --border-focus:  #B8966E;
 
-  --text:           #1F2937;
-  --text-sub:       #6B7280;
-  --text-light:     #9CA3AF;
+  /* ─── テキスト ──────────────────────── */
+  --text:          #1C1C1E;
+  --text-sub:      #6B6862;
+  --text-light:    #A09D98;
 
-  --shadow:         0 2px 8px rgba(233, 30, 140, 0.08);
-  --shadow-hover:   0 4px 16px rgba(233, 30, 140, 0.14);
+  /* ─── シャドウ ──────────────────────── */
+  --shadow:        0 1px 4px rgba(28, 28, 30, 0.06), 0 2px 12px rgba(28, 28, 30, 0.04);
+  --shadow-hover:  0 4px 16px rgba(28, 28, 30, 0.10);
+  --shadow-modal:  0 20px 60px rgba(28, 28, 30, 0.20);
 
-  --radius:         14px;
-  --radius-sm:      8px;
-  --radius-xs:      5px;
+  /* ─── 形状 ──────────────────────────── */
+  --radius:        10px;
+  --radius-sm:     6px;
+  --radius-xs:     4px;
+
+  /* ─── フォント ──────────────────────── */
+  --font-serif:    'Cormorant Garamond', 'Noto Serif JP', Georgia, serif;
+  --font-sans:     'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', sans-serif;
 }
 
 body {
-  font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI',
-               'Meiryo', sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  padding-bottom: 24px;
-  line-height: 1.5;
+  padding-bottom: 32px;
+  line-height: 1.6;
   font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* =============================================
    ヘッダー
    ============================================= */
 .header {
-  background: linear-gradient(135deg, var(--primary) 0%, #FF6EB4 100%);
-  color: white;
+  background: var(--primary);
+  color: #F5EFE6;
   padding: 14px 20px;
   position: sticky;
   top: 0;
   z-index: 200;
-  box-shadow: 0 2px 12px rgba(233, 30, 140, 0.3);
+  box-shadow: 0 1px 0 rgba(184, 150, 110, 0.3);
 }
 
 .header-inner {
@@ -68,22 +86,24 @@ body {
   margin: 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .logo {
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
 }
 
 .subtitle {
   font-size: 0.7rem;
-  opacity: 0.9;
-  background: rgba(255, 255, 255, 0.22);
-  padding: 3px 10px;
-  border-radius: 20px;
-  letter-spacing: 0.03em;
+  color: rgba(245, 239, 230, 0.6);
+  letter-spacing: 0.08em;
+  border-left: 1px solid rgba(184, 150, 110, 0.4);
+  padding-left: 14px;
+  margin-left: 2px;
 }
 
 /* =============================================
@@ -91,13 +111,12 @@ body {
    ============================================= */
 .nav {
   display: flex;
-  background: white;
-  border-bottom: 2px solid var(--border);
+  background: var(--primary);
+  border-bottom: 1px solid rgba(184, 150, 110, 0.2);
   overflow-x: auto;
   position: sticky;
   top: 53px;
   z-index: 100;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   scrollbar-width: none;
 }
 
@@ -105,38 +124,38 @@ body {
 
 .nav-btn {
   flex: 1;
-  min-width: 60px;
+  min-width: 62px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 9px 6px 7px;
+  padding: 10px 6px 8px;
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--text-sub);
-  font-size: 0.65rem;
-  font-family: inherit;
+  color: rgba(245, 239, 230, 0.5);
+  font-size: 0.62rem;
+  font-family: var(--font-sans);
   font-weight: 500;
-  transition: background 0.15s, color 0.15s;
-  border-bottom: 3px solid transparent;
+  letter-spacing: 0.04em;
+  transition: color 0.2s;
+  border-bottom: 2px solid transparent;
   white-space: nowrap;
 }
 
 .nav-btn .nav-icon {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   line-height: 1;
 }
 
 .nav-btn.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
   font-weight: 700;
 }
 
 .nav-btn:hover:not(.active) {
-  background: var(--primary-light);
-  color: var(--primary);
+  color: rgba(245, 239, 230, 0.85);
 }
 
 /* =============================================
@@ -145,7 +164,7 @@ body {
 .main {
   max-width: 960px;
   margin: 0 auto;
-  padding: 16px 16px 40px;
+  padding: 20px 16px 48px;
 }
 
 /* =============================================
@@ -153,7 +172,7 @@ body {
    ============================================= */
 .tab-content {
   display: none;
-  animation: fadeIn 0.2s ease;
+  animation: fadeIn 0.18s ease;
 }
 
 .tab-content.active {
@@ -161,7 +180,7 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -171,7 +190,7 @@ body {
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 20px;
   margin-bottom: 16px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
@@ -185,22 +204,25 @@ body {
   margin-bottom: 16px;
 }
 
-.income-card  { border-left: 4px solid var(--income); }
-.expense-card { border-left: 4px solid var(--expense); }
-.balance-card { border-left: 4px solid var(--primary); }
+.income-card  { border-top: 3px solid var(--income); }
+.expense-card { border-top: 3px solid var(--expense); }
+.balance-card { border-top: 3px solid var(--accent); }
 
 .card-label {
-  font-size: 0.72rem;
-  color: var(--text-sub);
-  margin-bottom: 6px;
+  font-size: 0.7rem;
+  color: var(--text-light);
+  margin-bottom: 8px;
   font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .card-value {
-  font-size: 1.45rem;
-  font-weight: 800;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  font-weight: 700;
   color: var(--text);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
 .income-text  { color: var(--income); }
@@ -210,15 +232,14 @@ body {
    セクションタイトル
    ============================================= */
 .section-title {
-  font-size: 0.9rem;
+  font-family: var(--font-serif);
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   padding-bottom: 10px;
-  border-bottom: 2px solid var(--primary-light);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.04em;
 }
 
 /* =============================================
@@ -243,28 +264,28 @@ body {
 .transaction-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .transaction-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-normal);
+  border: 1px solid var(--border);
   background: white;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .transaction-item:hover {
-  border-color: var(--primary-light);
-  box-shadow: var(--shadow-hover);
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(184, 150, 110, 0.1);
 }
 
 .transaction-type-dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -277,7 +298,7 @@ body {
 }
 
 .transaction-desc {
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -286,7 +307,7 @@ body {
 }
 
 .transaction-meta {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--text-sub);
   display: flex;
   flex-wrap: wrap;
@@ -296,19 +317,21 @@ body {
 }
 
 .tag {
-  background: #F3F4F6;
+  background: #F2F0EC;
   color: var(--text-sub);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 0.68rem;
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-size: 0.67rem;
   font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
-.tag.cash { background: #FEF3C7; color: #92400E; }
-.tag.card { background: #DBEAFE; color: #1E40AF; }
+.tag.cash { background: #F5EFE6; color: #8A6A40; }
+.tag.card { background: #EAF0F7; color: #3A6080; }
 
 .transaction-amount {
-  font-size: 0.93rem;
+  font-family: var(--font-serif);
+  font-size: 1rem;
   font-weight: 700;
   flex-shrink: 0;
   letter-spacing: -0.01em;
@@ -319,9 +342,9 @@ body {
 .delete-btn {
   background: none;
   border: none;
-  color: #D1D5DB;
+  color: var(--border-normal);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   padding: 4px 6px;
   border-radius: var(--radius-xs);
   transition: color 0.15s, background 0.15s;
@@ -345,37 +368,39 @@ body {
 /* 収入／支出 切り替えボタン */
 .type-toggle {
   display: flex;
-  gap: 10px;
-  margin-bottom: 22px;
+  gap: 8px;
+  margin-bottom: 24px;
 }
 
 .type-btn {
   flex: 1;
   padding: 11px 8px;
-  border: 2px solid var(--border-normal);
+  border: 1.5px solid var(--border-normal);
   border-radius: var(--radius-sm);
   background: white;
   cursor: pointer;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  font-family: inherit;
+  font-family: var(--font-sans);
   transition: all 0.15s;
   color: var(--text-sub);
+  letter-spacing: 0.02em;
 }
 
 .type-btn.active[data-type="income"] {
   background: var(--income-light);
   border-color: var(--income);
-  color: #065F46;
+  color: var(--income-hover);
 }
 .type-btn.active[data-type="expense"] {
   background: var(--expense-light);
   border-color: var(--expense);
-  color: #991B1B;
+  color: var(--expense-hover);
 }
 .type-btn:hover:not(.active) {
-  background: #F9FAFB;
-  border-color: #D1D5DB;
+  background: var(--bg);
+  border-color: #C8C5BF;
+  color: var(--text);
 }
 
 .record-form {
@@ -397,15 +422,16 @@ body {
 }
 
 .form-group label {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text);
+  letter-spacing: 0.02em;
 }
 
 .form-group label small {
   font-weight: 400;
-  color: var(--text-sub);
-  font-size: 0.75rem;
+  color: var(--text-light);
+  font-size: 0.72rem;
 }
 
 .form-group input,
@@ -413,8 +439,8 @@ body {
   padding: 10px 12px;
   border: 1.5px solid var(--border-normal);
   border-radius: var(--radius-sm);
-  font-size: 0.95rem;
-  font-family: inherit;
+  font-size: 0.9rem;
+  font-family: var(--font-sans);
   background: white;
   color: var(--text);
   width: 100%;
@@ -424,7 +450,7 @@ body {
 }
 
 .form-group select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23A09D98' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 36px;
@@ -433,14 +459,14 @@ body {
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-dim);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 /* 支払い方法 ラジオボタン */
 .payment-toggle {
   display: flex;
-  gap: 12px;
+  gap: 10px;
 }
 
 .payment-option {
@@ -451,7 +477,7 @@ body {
   border: 1.5px solid var(--border-normal);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   font-weight: 500;
   transition: all 0.15s;
   color: var(--text-sub);
@@ -459,16 +485,16 @@ body {
 }
 
 .payment-option.selected {
-  border-color: var(--primary);
-  background: var(--primary-light);
-  color: var(--primary-hover);
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent-hover);
   font-weight: 700;
 }
 
 .payment-option input[type="radio"] {
   width: 15px;
   height: 15px;
-  accent-color: var(--primary);
+  accent-color: var(--accent);
   flex-shrink: 0;
 }
 
@@ -479,69 +505,86 @@ body {
   padding: 10px 20px;
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   font-weight: 700;
-  font-family: inherit;
+  font-family: var(--font-sans);
   cursor: pointer;
   transition: all 0.15s;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  letter-spacing: 0.02em;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary), #FF6EB4);
-  color: white;
-  box-shadow: 0 4px 12px rgba(233, 30, 140, 0.3);
+  background: var(--primary);
+  color: var(--accent);
+  box-shadow: none;
+  border: 1.5px solid transparent;
 }
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(233, 30, 140, 0.4);
+  background: #2C2C2E;
+  border-color: var(--accent);
 }
 .btn-primary:active {
-  transform: translateY(0);
+  transform: scale(0.98);
 }
 
 .btn-secondary {
-  background: #F3F4F6;
+  background: white;
   color: var(--text);
-  border: 1px solid var(--border-normal);
+  border: 1.5px solid var(--border-normal);
 }
-.btn-secondary:hover { background: #E5E7EB; }
+.btn-secondary:hover {
+  background: var(--bg);
+  border-color: #C8C5BF;
+}
+
+.btn-accent {
+  background: var(--accent);
+  color: white;
+  border: 1.5px solid transparent;
+}
+.btn-accent:hover {
+  background: var(--accent-hover);
+}
 
 .btn-danger {
   background: var(--expense);
   color: white;
+  border: 1.5px solid transparent;
 }
-.btn-danger:hover { background: #DC2626; }
+.btn-danger:hover { background: var(--expense-hover); }
 
 .btn-full {
   width: 100%;
   padding: 13px;
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 /* =============================================
    フォームメッセージ
    ============================================= */
 .form-message {
-  margin-top: 14px;
+  margin-top: 12px;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   display: none;
   font-weight: 500;
 }
 .form-message.success {
   background: var(--income-light);
-  color: #065F46;
+  color: var(--income-hover);
   display: block;
+  border-left: 3px solid var(--income);
 }
 .form-message.error {
   background: var(--expense-light);
-  color: #991B1B;
+  color: var(--expense-hover);
   display: block;
+  border-left: 3px solid var(--expense);
 }
 
 /* =============================================
@@ -550,7 +593,7 @@ body {
 .filter-bar {
   display: flex;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
@@ -558,14 +601,14 @@ body {
   padding: 8px 10px;
   border: 1.5px solid var(--border-normal);
   border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  font-family: inherit;
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
   background: white;
   color: var(--text);
   flex: 1;
   min-width: 120px;
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23A09D98' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 30px;
@@ -574,8 +617,8 @@ body {
 }
 .filter-select:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-dim);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
 /* =============================================
@@ -586,9 +629,9 @@ body {
   padding: 48px 20px;
   color: var(--text-light);
 }
-.empty-state p:first-child { font-size: 2.5rem; margin-bottom: 10px; }
-.empty-state p { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
-.empty-state .empty-sub { font-size: 0.8rem; font-weight: 400; color: var(--text-light); }
+.empty-state p:first-child { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
+.empty-state p { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
+.empty-state .empty-sub { font-size: 0.78rem; font-weight: 400; color: var(--text-light); }
 
 /* =============================================
    集計テーブル
@@ -601,34 +644,36 @@ body {
 .summary-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.855rem;
+  font-size: 0.84rem;
   min-width: 300px;
 }
 
 .summary-table th {
   padding: 9px 14px;
-  background: var(--primary-light);
-  color: var(--primary-hover);
+  background: var(--bg);
+  color: var(--text-sub);
   text-align: right;
   font-weight: 700;
   white-space: nowrap;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid var(--border);
 }
 .summary-table th:first-child { text-align: left; }
 
 .summary-table td {
   padding: 9px 14px;
-  border-bottom: 1px solid #F3F4F6;
+  border-bottom: 1px solid var(--border);
   text-align: right;
   color: var(--text);
 }
 .summary-table td:first-child { text-align: left; font-weight: 600; }
 
 .summary-table tbody tr:last-child td { border-bottom: none; }
-.summary-table tbody tr:hover td { background: #FAFAFA; }
+.summary-table tbody tr:hover td { background: var(--bg); }
 
-.profit-positive { color: var(--income);  font-weight: 700; }
-.profit-negative { color: var(--expense); font-weight: 700; }
+.profit-positive { color: var(--income);  font-weight: 700; font-family: var(--font-serif); }
+.profit-negative { color: var(--expense); font-weight: 700; font-family: var(--font-serif); }
 
 /* =============================================
    集計タブ：年度フィルターカード
@@ -640,28 +685,29 @@ body {
   padding: 12px 16px;
 }
 .filter-card label {
-  font-size: 0.85rem;
+  font-size: 0.83rem;
   font-weight: 700;
   white-space: nowrap;
-  color: var(--text);
+  color: var(--text-sub);
+  letter-spacing: 0.04em;
 }
 
 /* =============================================
    設定タブ：危険ゾーン
    ============================================= */
 .danger-zone {
-  border: 1px solid #FEE2E2;
+  border: 1px solid #E8D8D8;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 .danger-note {
-  font-size: 0.82rem;
-  color: #92400E;
-  background: #FEF3C7;
+  font-size: 0.8rem;
+  color: var(--expense-hover);
+  background: var(--expense-light);
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 /* =============================================
@@ -670,41 +716,44 @@ body {
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 28, 30, 0.55);
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  backdrop-filter: blur(2px);
+  padding: 16px;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
 
 .modal-content {
   background: white;
   border-radius: var(--radius);
-  padding: 28px;
-  max-width: 360px;
+  padding: 28px 24px;
+  max-width: 380px;
   width: 100%;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-modal);
   animation: slideUp 0.2s ease;
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 .modal-content h3 {
-  font-size: 1.05rem;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
   font-weight: 700;
   margin-bottom: 10px;
   color: var(--text);
+  letter-spacing: 0.02em;
 }
 .modal-content p {
   font-size: 0.875rem;
   color: var(--text-sub);
-  margin-bottom: 22px;
-  line-height: 1.6;
+  margin-bottom: 24px;
+  line-height: 1.7;
 }
 .modal-buttons {
   display: flex;
@@ -716,10 +765,10 @@ body {
    レスポンシブ：タブレット以下
    ============================================= */
 @media (max-width: 640px) {
-  .logo { font-size: 1.1rem; }
+  .logo { font-size: 1.15rem; }
   .subtitle { display: none; }
 
-  .card-value { font-size: 1.2rem; }
+  .card-value { font-size: 1.3rem; }
 
   .chart-section {
     grid-template-columns: 1fr;
@@ -729,7 +778,7 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .main { padding: 12px 12px 40px; }
+  .main { padding: 14px 12px 48px; }
 }
 
 /* =============================================
@@ -743,4 +792,5 @@ body {
   .filter-select { min-width: unset; }
   .modal-buttons { flex-direction: column-reverse; }
   .modal-buttons .btn { width: 100%; }
+  .modal-content { padding: 22px 18px; }
 }

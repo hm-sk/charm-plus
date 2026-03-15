@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Charm+ プレビュー</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#1C1C1E;--primary-light:#2C2C2E;--accent:#B8966E;--accent-hover:#A07D58;--accent-light:#F5EFE6;--accent-dim:rgba(184,150,110,0.15);--income:#6B9E78;--income-hover:#5A8867;--income-light:#EAF3EC;--expense:#B07070;--expense-hover:#9A5E5E;--expense-light:#F5EDED;--bg:#FAFAF8;--card-bg:#FFFFFF;--border:#E8E5DF;--border-normal:#E0DDD7;--border-focus:#B8966E;--text:#1C1C1E;--text-sub:#6B6862;--text-light:#A09D98;--shadow:0 1px 4px rgba(28,28,30,0.06),0 2px 12px rgba(28,28,30,0.04);--shadow-hover:0 4px 16px rgba(28,28,30,0.10);--radius:10px;--radius-sm:6px;--radius-xs:4px;--font-serif:'Cormorant Garamond','Noto Serif JP',Georgia,serif;--font-sans:'Noto Sans JP','Hiragino Sans',sans-serif}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:32px;line-height:1.6;font-size:14px;-webkit-font-smoothing:antialiased}
+.header{background:var(--primary);color:#F5EFE6;padding:14px 20px;position:sticky;top:0;z-index:200;box-shadow:0 1px 0 rgba(184,150,110,0.3)}
+.header-inner{max-width:960px;margin:0 auto;display:flex;align-items:center;gap:14px}
+.logo{font-family:var(--font-serif);font-size:1.35rem;font-weight:700;letter-spacing:0.06em;color:var(--accent)}
+.subtitle{font-size:0.7rem;color:rgba(245,239,230,0.6);letter-spacing:0.08em;border-left:1px solid rgba(184,150,110,0.4);padding-left:14px}
+.nav{display:flex;background:var(--primary);border-bottom:1px solid rgba(184,150,110,0.2);overflow-x:auto;position:sticky;top:53px;z-index:100;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav-btn{flex:1;min-width:62px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 6px 8px;border:none;background:none;cursor:pointer;color:rgba(245,239,230,0.5);font-size:0.62rem;font-family:var(--font-sans);font-weight:500;letter-spacing:0.04em;transition:color 0.2s;border-bottom:2px solid transparent;white-space:nowrap}
+.nav-btn .nav-icon{font-size:1.1rem;line-height:1}
+.nav-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
+.nav-btn:hover:not(.active){color:rgba(245,239,230,0.85)}
+.main{max-width:960px;margin:0 auto;padding:20px 16px 48px}
+.tab-content{display:none;animation:fadeIn 0.18s ease}
+.tab-content.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.card{background:var(--card-bg);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.card-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px}
+.income-card{border-top:3px solid var(--income)}
+.expense-card{border-top:3px solid var(--expense)}
+.balance-card{border-top:3px solid var(--accent)}
+.card-label{font-size:0.7rem;color:var(--text-light);margin-bottom:8px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase}
+.card-value{font-family:var(--font-serif);font-size:1.6rem;font-weight:700;color:var(--text)}
+.income-text{color:var(--income)}
+.expense-text{color:var(--expense)}
+.section-title{font-family:var(--font-serif);font-size:1rem;font-weight:700;color:var(--text);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);letter-spacing:0.04em}
+.transaction-list{display:flex;flex-direction:column;gap:6px}
+.transaction-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:white;transition:border-color 0.15s,box-shadow 0.15s}
+.transaction-item:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(184,150,110,0.1)}
+.transaction-type-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.transaction-type-dot.income{background:var(--income)}
+.transaction-type-dot.expense{background:var(--expense)}
+.transaction-info{flex:1;min-width:0}
+.transaction-desc{font-size:0.875rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.transaction-meta{font-size:0.68rem;color:var(--text-sub);display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;align-items:center}
+.tag{background:#F2F0EC;color:var(--text-sub);padding:1px 7px;border-radius:3px;font-size:0.67rem;font-weight:500}
+.tag.cash{background:#F5EFE6;color:#8A6A40}
+.tag.card{background:#EAF0F7;color:#3A6080}
+.transaction-amount{font-family:var(--font-serif);font-size:1rem;font-weight:700;flex-shrink:0}
+.transaction-amount.income{color:var(--income)}
+.transaction-amount.expense{color:var(--expense)}
+.form-card{max-width:620px;margin-left:auto;margin-right:auto}
+.type-toggle{display:flex;gap:8px;margin-bottom:24px}
+.type-btn{flex:1;padding:11px 8px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);background:white;cursor:pointer;font-size:0.875rem;font-weight:600;font-family:var(--font-sans);transition:all 0.15s;color:var(--text-sub)}
+.type-btn.active[data-type="income"]{background:var(--income-light);border-color:var(--income);color:var(--income-hover)}
+.type-btn.active[data-type="expense"]{background:var(--expense-light);border-color:var(--expense);color:var(--expense-hover)}
+.record-form{display:flex;flex-direction:column;gap:16px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group label{font-size:0.8rem;font-weight:700;color:var(--text)}
+.form-group input,.form-group select{padding:10px 12px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);font-size:0.9rem;font-family:var(--font-sans);background:white;color:var(--text);width:100%;-webkit-appearance:none;appearance:none}
+.form-group select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23A09D98' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--border-focus);box-shadow:0 0 0 3px var(--accent-dim)}
+.payment-toggle{display:flex;gap:10px}
+.payment-option{display:flex;align-items:center;gap:7px;padding:9px 18px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);cursor:pointer;font-size:0.875rem;font-weight:500;transition:all 0.15s;color:var(--text-sub)}
+.payment-option.selected{border-color:var(--accent);background:var(--accent-light);color:var(--accent-hover);font-weight:700}
+.btn{padding:10px 20px;border:none;border-radius:var(--radius-sm);font-size:0.875rem;font-weight:700;font-family:var(--font-sans);cursor:pointer;transition:all 0.15s;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn-primary{background:var(--primary);color:var(--accent);border:1.5px solid transparent}
+.btn-primary:hover{background:#2C2C2E;border-color:var(--accent)}
+.btn-secondary{background:white;color:var(--text);border:1.5px solid var(--border-normal)}
+.btn-full{width:100%;padding:13px;font-size:0.95rem}
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-select{padding:8px 10px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);font-size:0.8rem;font-family:var(--font-sans);background:white;color:var(--text);flex:1;min-width:120px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23A09D98' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px;-webkit-appearance:none;appearance:none}
+.summary-table{width:100%;border-collapse:collapse;font-size:0.84rem}
+.summary-table th{padding:9px 14px;background:var(--bg);color:var(--text-sub);text-align:right;font-weight:700;font-size:0.78rem;border-bottom:2px solid var(--border)}
+.summary-table th:first-child{text-align:left}
+.summary-table td{padding:9px 14px;border-bottom:1px solid var(--border);text-align:right}
+.summary-table td:first-child{text-align:left;font-weight:600}
+.summary-table tbody tr:hover td{background:var(--bg)}
+.profit-positive{color:var(--income);font-weight:700;font-family:var(--font-serif)}
+.profit-negative{color:var(--expense);font-weight:700;font-family:var(--font-serif)}
+.appt-action-btn{border:none;border-radius:var(--radius-xs);padding:5px 12px;font-size:12px;cursor:pointer;font-family:var(--font-sans);font-weight:700}
+@media(max-width:640px){.subtitle{display:none}.form-row{grid-template-columns:1fr}.main{padding:14px 12px 48px}}
+@media(max-width:420px){.card-grid{grid-template-columns:1fr}.type-toggle{flex-direction:column}.payment-toggle{flex-direction:column}.filter-bar{flex-direction:column}}
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <h1 class="logo">Charm+</h1>
+    <span class="subtitle">ネイルサロン サンプル ┊ 青色申告対応</span>
+  </div>
+</header>
+
+<nav class="nav">
+  <button class="nav-btn" data-tab="appointments">
+    <span class="nav-icon">📅</span><span>予約</span>
+  </button>
+  <button class="nav-btn active" data-tab="dashboard">
+    <span class="nav-icon">📊</span><span>ダッシュボード</span>
+  </button>
+  <button class="nav-btn" data-tab="record">
+    <span class="nav-icon">✏️</span><span>記録する</span>
+  </button>
+  <button class="nav-btn" data-tab="list">
+    <span class="nav-icon">📋</span><span>収支一覧</span>
+  </button>
+  <button class="nav-btn" data-tab="customers">
+    <span class="nav-icon">👤</span><span>顧客</span>
+  </button>
+  <button class="nav-btn" data-tab="summary">
+    <span class="nav-icon">📈</span><span>集計</span>
+  </button>
+  <button class="nav-btn" data-tab="settings">
+    <span class="nav-icon">⚙️</span><span>設定</span>
+  </button>
+</nav>
+
+<main class="main">
+
+  <!-- ══ 予約タブ ══ -->
+  <section id="tab-appointments" class="tab-content">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" style="padding:7px 12px;font-size:13px;">◀</button>
+        <input type="date" value="2026-03-15"
+          style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);">
+        <button class="btn btn-secondary" style="padding:7px 14px;font-size:13px;">Today</button>
+        <button class="btn btn-secondary" style="padding:7px 12px;font-size:13px;">▶</button>
+      </div>
+      <div style="font-family:var(--font-serif);font-size:0.95rem;font-weight:700;color:var(--text);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">2026年3月15日（日）の予約 (3件)</div>
+
+      <!-- pending -->
+      <div style="background:white;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px;">
+        <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div style="font-family:var(--font-serif);font-size:1.3rem;font-weight:700;min-width:52px;">10:00</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:14px;">佐藤 美咲</div>
+            <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">ジェルネイル（ワンカラー） ／ ¥7,000</div>
+            <div style="font-size:12px;color:var(--text-sub);">090-1234-5678</div>
+          </div>
+          <span style="background:#FEF3C7;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🟡 未確認</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="appt-action-btn" style="background:var(--income);color:white;">確定する</button>
+          <button class="appt-action-btn" style="background:none;border:1px solid #FECACA;color:#EF4444;">キャンセル</button>
+        </div>
+      </div>
+
+      <!-- confirmed -->
+      <div style="background:white;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px;">
+        <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div style="font-family:var(--font-serif);font-size:1.3rem;font-weight:700;min-width:52px;">13:00</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:14px;">田中 花子</div>
+            <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">まつエク（120本） ／ ¥8,000</div>
+            <div style="font-size:12px;color:var(--text-sub);">090-9876-5432</div>
+          </div>
+          <span style="background:#EAF3EC;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">🟢 確定</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="appt-action-btn" style="background:var(--primary);color:var(--accent);">完了</button>
+          <button class="appt-action-btn" style="background:none;border:1px solid #FECACA;color:#EF4444;">NC</button>
+          <button class="appt-action-btn" style="background:none;border:1px solid var(--border-normal);color:var(--text-sub);">取消</button>
+        </div>
+      </div>
+
+      <!-- completed -->
+      <div style="background:#F9F9F8;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px;opacity:0.65;">
+        <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div style="font-family:var(--font-serif);font-size:1.3rem;font-weight:700;min-width:52px;">15:30</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:14px;">鈴木 彩</div>
+            <div style="font-size:12px;color:var(--text-sub);margin-top:2px;">ジェルネイル（アート） ／ ¥10,000</div>
+          </div>
+          <span style="background:#F0F0F0;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;">✅ 完了</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ ダッシュボード ══ -->
+  <section id="tab-dashboard" class="tab-content active">
+    <div class="card-grid">
+      <div class="card balance-card">
+        <div class="card-label">💴 現金残高</div>
+        <div class="card-value">¥82,400</div>
+      </div>
+      <div class="card balance-card">
+        <div class="card-label">🏦 預金残高</div>
+        <div class="card-value">¥318,000</div>
+      </div>
+      <div class="card income-card">
+        <div class="card-label">📈 今月の売上</div>
+        <div class="card-value income-text">¥245,000</div>
+      </div>
+      <div class="card expense-card">
+        <div class="card-label">📉 今月の経費</div>
+        <div class="card-value expense-text">¥38,500</div>
+      </div>
+      <div class="card balance-card" style="grid-column:span 2">
+        <div class="card-label">📅 今月の予約売上見込み</div>
+        <div class="card-value" style="color:var(--accent);">¥57,000</div>
+      </div>
+    </div>
+
+    <!-- 本日のスケジュール -->
+    <div class="card">
+      <h2 class="section-title">本日のスケジュール</h2>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <span style="font-family:var(--font-serif);font-size:1.1rem;font-weight:700;min-width:48px;">10:00</span>
+        <span style="font-size:14px;">🟡</span>
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:14px;">佐藤 美咲</div>
+          <div style="font-size:12px;color:var(--text-sub);">ジェルネイル（ワンカラー） ／ ¥7,000</div>
+        </div>
+        <span style="font-size:12px;color:var(--text-sub);">90分</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <span style="font-family:var(--font-serif);font-size:1.1rem;font-weight:700;min-width:48px;">13:00</span>
+        <span style="font-size:14px;">🟢</span>
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:14px;">田中 花子</div>
+          <div style="font-size:12px;color:var(--text-sub);">まつエク（120本） ／ ¥8,000</div>
+        </div>
+        <span style="font-size:12px;color:var(--text-sub);">90分</span>
+      </div>
+    </div>
+
+    <!-- 最近の記録 -->
+    <div class="card">
+      <h2 class="section-title">最近の記録</h2>
+      <div class="transaction-list">
+        <div class="transaction-item">
+          <div class="transaction-type-dot income"></div>
+          <div class="transaction-info">
+            <div class="transaction-desc">ジェルネイル（アート）（予約 #appt_001）</div>
+            <div class="transaction-meta"><span>2026/03/15</span><span class="tag">売上</span><span class="tag cash">💴 現金</span></div>
+          </div>
+          <div class="transaction-amount income">+¥10,000</div>
+        </div>
+        <div class="transaction-item">
+          <div class="transaction-type-dot income"></div>
+          <div class="transaction-info">
+            <div class="transaction-desc">ジェルネイル施術 3名分</div>
+            <div class="transaction-meta"><span>2026/03/14</span><span class="tag">売上</span><span class="tag cash">💴 現金</span></div>
+          </div>
+          <div class="transaction-amount income">+¥21,000</div>
+        </div>
+        <div class="transaction-item">
+          <div class="transaction-type-dot expense"></div>
+          <div class="transaction-info">
+            <div class="transaction-desc">ジェルカラー 補充</div>
+            <div class="transaction-meta"><span>2026/03/13</span><span class="tag">材料費</span><span class="tag card">💳 カード</span></div>
+          </div>
+          <div class="transaction-amount expense">−¥8,500</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ 記録する ══ -->
+  <section id="tab-record" class="tab-content">
+    <div class="card form-card">
+      <h2 class="section-title">収支を記録する</h2>
+      <div class="type-toggle">
+        <button class="type-btn active" data-type="income">💰 収入（売上）</button>
+        <button class="type-btn" data-type="expense">💸 支出（経費）</button>
+      </div>
+      <div class="record-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>日付</label>
+            <input type="date" value="2026-03-15">
+          </div>
+          <div class="form-group">
+            <label>金額（円）</label>
+            <input type="number" id="previewAmount" placeholder="例：5000">
+          </div>
+        </div>
+        <div id="menuSelectRow" class="form-group">
+          <label>メニューから選択 <small>（金額・科目を自動入力）</small></label>
+          <select id="previewMenu">
+            <option value="">-- メニューから選択（省略可） --</option>
+            <option value="1" data-price="7000" data-name="ジェルネイル（ワンカラー）">ジェルネイル（ワンカラー）（¥7,000 / 90分）</option>
+            <option value="2" data-price="10000" data-name="ジェルネイル（アート）">ジェルネイル（アート）（¥10,000 / 120分）</option>
+            <option value="3" data-price="8000" data-name="まつエク（120本）">まつエク（120本）（¥8,000 / 90分）</option>
+            <option value="4" data-price="11000" data-name="まつエク（160本）">まつエク（160本）（¥11,000 / 120分）</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>勘定科目</label>
+          <select id="previewCategory"><option>売上</option></select>
+        </div>
+        <div class="form-group">
+          <label>内容・メモ</label>
+          <input type="text" id="previewDesc" placeholder="例：ジェルネイル施術 3名分">
+        </div>
+        <div class="form-group">
+          <label>支払い方法</label>
+          <div class="payment-toggle">
+            <label class="payment-option selected"><input type="radio" name="pm" checked> <span>💴 現金</span></label>
+            <label class="payment-option"><input type="radio" name="pm"> <span>💳 カード／振込</span></label>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full">記録する</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ 収支一覧 ══ -->
+  <section id="tab-list" class="tab-content">
+    <div class="card">
+      <h2 class="section-title">収支一覧</h2>
+      <div class="filter-bar">
+        <select class="filter-select"><option>全期間</option><option>2026年 3月</option></select>
+        <select class="filter-select"><option>収入・支出すべて</option><option>収入のみ</option><option>支出のみ</option></select>
+        <select class="filter-select"><option>科目すべて</option><option>売上</option><option>材料費</option></select>
+      </div>
+      <div class="transaction-list">
+        <div class="transaction-item">
+          <div class="transaction-type-dot income"></div>
+          <div class="transaction-info">
+            <div class="transaction-desc">ジェルネイル（アート）（予約 #appt_001）</div>
+            <div class="transaction-meta"><span>2026/03/15</span><span class="tag">売上</span><span class="tag cash">💴 現金</span></div>
+          </div>
+          <div class="transaction-amount income">+¥10,000</div>
+          <button style="background:none;border:1px solid var(--border-normal);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--text);margin-right:4px;">編集</button>
+          <button style="background:none;border:none;color:var(--border-normal);cursor:pointer;font-size:0.85rem;padding:4px 6px;">✕</button>
+        </div>
+        <div class="transaction-item">
+          <div class="transaction-type-dot income"></div>
+          <div class="transaction-info">
+            <div class="transaction-desc">ジェルネイル施術 3名分</div>
+            <div class="transaction-meta"><span>2026/03/14</span><span class="tag">売上</span><span class="tag cash">💴 現金</span></div>
+          </div>
+          <div class="transaction-amount income">+¥21,000</div>
+          <button style="background:none;border:1px solid var(--border-normal);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--text);margin-right:4px;">編集</button>
+          <button style="background:none;border:none;color:var(--border-normal);cursor:pointer;font-size:0.85rem;padding:4px 6px;">✕</button>
+        </div>
+        <div class="transaction-item">
+          <div class="transaction-type-dot expense"></div>
+          <div class="transaction-info">
+            <div class="transaction-desc">ジェルカラー 補充</div>
+            <div class="transaction-meta"><span>2026/03/13</span><span class="tag">材料費</span><span class="tag card">💳 カード</span></div>
+          </div>
+          <div class="transaction-amount expense">−¥8,500</div>
+          <button style="background:none;border:1px solid var(--border-normal);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--text);margin-right:4px;">編集</button>
+          <button style="background:none;border:none;color:var(--border-normal);cursor:pointer;font-size:0.85rem;padding:4px 6px;">✕</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ 顧客タブ ══ -->
+  <section id="tab-customers" class="tab-content">
+    <div class="card">
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+        <input type="text" placeholder="名前・フリガナ・電話番号で検索"
+          style="flex:1;min-width:200px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:9px 12px;font-size:13px;font-family:var(--font-sans);">
+        <button class="btn btn-primary" style="font-size:13px;white-space:nowrap;">＋ 新規登録</button>
+      </div>
+
+      <!-- 顧客カード -->
+      <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:1.1rem;color:var(--accent);font-weight:700;flex-shrink:0;">田</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.9rem;font-weight:700;">田中 花子</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);">タナカ ハナコ</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-top:2px;">090-9876-5432</div>
+        </div>
+        <div style="text-align:right;font-size:0.72rem;color:var(--text-sub);flex-shrink:0;">
+          最終来店<br><span style="color:var(--text);font-weight:600;">2026-03-13</span>
+          <br><span style="margin-top:4px;display:inline-block;">来店 <strong>8</strong> 回</span>
+        </div>
+        <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;">
+          <button style="background:none;border:1px solid var(--border-normal);border-radius:var(--radius-xs);padding:3px 10px;font-size:11px;cursor:pointer;color:var(--text);">編集</button>
+          <button style="background:none;border:1px solid #FECACA;border-radius:var(--radius-xs);padding:3px 10px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:1.1rem;color:var(--accent);font-weight:700;flex-shrink:0;">佐</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.9rem;font-weight:700;">佐藤 美咲</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);">サトウ ミサキ</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-top:2px;">090-1234-5678</div>
+        </div>
+        <div style="text-align:right;font-size:0.72rem;color:var(--text-sub);flex-shrink:0;">
+          最終来店<br><span style="color:var(--text);font-weight:600;">2026-02-22</span>
+          <br><span style="margin-top:4px;display:inline-block;">来店 <strong>3</strong> 回</span>
+        </div>
+        <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;">
+          <button style="background:none;border:1px solid var(--border-normal);border-radius:var(--radius-xs);padding:3px 10px;font-size:11px;cursor:pointer;color:var(--text);">編集</button>
+          <button style="background:none;border:1px solid #FECACA;border-radius:var(--radius-xs);padding:3px 10px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:1.1rem;color:var(--accent);font-weight:700;flex-shrink:0;">鈴</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.9rem;font-weight:700;">鈴木 彩</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);">スズキ アヤ</div>
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-top:2px;">090-5555-1111</div>
+        </div>
+        <div style="text-align:right;font-size:0.72rem;color:var(--text-sub);flex-shrink:0;">
+          <span style="color:var(--text-light);">未来店</span>
+          <br><span style="margin-top:4px;display:inline-block;">来店 <strong>0</strong> 回</span>
+        </div>
+        <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;">
+          <button style="background:none;border:1px solid var(--border-normal);border-radius:var(--radius-xs);padding:3px 10px;font-size:11px;cursor:pointer;color:var(--text);">編集</button>
+          <button style="background:none;border:1px solid #FECACA;border-radius:var(--radius-xs);padding:3px 10px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ 集計 ══ -->
+  <section id="tab-summary" class="tab-content">
+    <div class="card-grid">
+      <div class="card income-card">
+        <div class="card-label">年間売上合計</div>
+        <div class="card-value income-text">¥2,940,000</div>
+      </div>
+      <div class="card expense-card">
+        <div class="card-label">年間経費合計</div>
+        <div class="card-value expense-text">¥462,000</div>
+      </div>
+      <div class="card" style="grid-column:span 2">
+        <div class="card-label">所得（売上－経費）</div>
+        <div class="card-value profit-positive">¥2,478,000</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 class="section-title">月別 収支一覧</h2>
+      <table class="summary-table">
+        <thead><tr><th>月</th><th>売上</th><th>経費</th><th>差引</th></tr></thead>
+        <tbody>
+          <tr><td>1月</td><td>¥245,000</td><td>¥38,500</td><td class="profit-positive">+¥206,500</td></tr>
+          <tr><td>2月</td><td>¥210,000</td><td>¥42,000</td><td class="profit-positive">+¥168,000</td></tr>
+          <tr><td>3月</td><td>¥245,000</td><td>¥38,500</td><td class="profit-positive">+¥206,500</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══ 設定 ══ -->
+  <section id="tab-settings" class="tab-content">
+    <div class="card form-card">
+      <h2 class="section-title">初期設定</h2>
+      <div class="record-form">
+        <div class="form-group">
+          <label>屋号・お店の名前</label>
+          <input type="text" value="ネイルサロン サンプル">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>現金の初期残高（円）</label>
+            <input type="number" value="50000">
+          </div>
+          <div class="form-group">
+            <label>預金の初期残高（円）</label>
+            <input type="number" value="300000">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-full">保存する</button>
+      </div>
+    </div>
+
+    <!-- 営業時間 -->
+    <div class="card form-card" style="margin-top:16px;">
+      <h2 class="section-title">営業時間・予約設定</h2>
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:14px;">予約フォームの空き枠計算に使用します</p>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+        <span style="width:20px;font-weight:700;font-size:13px;text-align:center;">月</span>
+        <input type="time" value="10:00" style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:6px 8px;font-size:13px;width:80px;">
+        <span style="font-size:12px;color:var(--text-sub);">〜</span>
+        <input type="time" value="19:00" style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:6px 8px;font-size:13px;width:80px;">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+        <span style="width:20px;font-weight:700;font-size:13px;text-align:center;">水</span>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-sub);">
+          <input type="checkbox" checked style="width:15px;height:15px;accent-color:var(--accent);"> 定休日
+        </label>
+        <span style="font-size:12px;color:var(--text-light);">定休日</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:16px;">
+        <label style="font-size:13px;font-weight:700;white-space:nowrap;">予約受付日数</label>
+        <input type="number" value="60" style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:6px 8px;font-size:13px;width:70px;">
+        <span style="font-size:12px;color:var(--text-sub);">日先まで</span>
+      </div>
+      <button class="btn btn-primary" style="margin-top:14px;">保存する</button>
+    </div>
+
+    <!-- メニュー管理 -->
+    <div class="card form-card" style="margin-top:16px;">
+      <h2 class="section-title">メニュー管理</h2>
+      <div>
+        <div style="display:grid;grid-template-columns:1fr 90px 90px auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:13px;">ジェルネイル（ワンカラー）</span>
+          <span style="font-size:13px;font-family:var(--font-serif);color:var(--accent);text-align:right;">¥7,000</span>
+          <span style="font-size:12px;color:var(--text-sub);text-align:right;">90分</span>
+          <button style="background:none;border:1px solid #FECACA;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 90px 90px auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:13px;">まつエク（120本）</span>
+          <span style="font-size:13px;font-family:var(--font-serif);color:var(--accent);text-align:right;">¥8,000</span>
+          <span style="font-size:12px;color:var(--text-sub);text-align:right;">90分</span>
+          <button style="background:none;border:1px solid #FECACA;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 90px 90px auto;gap:8px;margin-top:12px;align-items:center;">
+        <input type="text" placeholder="メニュー名" style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);">
+        <input type="number" placeholder="金額" style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);">
+        <input type="number" placeholder="分" style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);">
+        <button class="btn btn-primary" style="font-size:13px;padding:8px 14px;white-space:nowrap;">追加</button>
+      </div>
+    </div>
+
+    <!-- QRコード -->
+    <div class="card form-card" style="margin-top:16px;">
+      <h2 class="section-title">予約フォーム QRコード</h2>
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:14px;">booking.html のURLを入力してショップカード用QRコードを生成します</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="url" placeholder="https://example.com/booking.html"
+          style="flex:1;min-width:200px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;font-family:var(--font-sans);">
+        <button class="btn btn-primary">QR生成</button>
+        <button class="btn btn-secondary" style="border:1.5px solid var(--border-normal);background:none;color:var(--text);">URLコピー</button>
+      </div>
+      <div style="margin-top:16px;text-align:center;padding:24px;border:2px dashed var(--border);border-radius:var(--radius-sm);color:var(--text-light);font-size:13px;">
+        URLを入力してQR生成をクリック
+      </div>
+    </div>
+
+    <div class="card" style="border:1px solid #E8D8D8;margin-top:16px;">
+      <h2 class="section-title">データ管理</h2>
+      <p style="font-size:0.8rem;color:#9A5E5E;background:#F5EDED;padding:8px 12px;border-radius:6px;margin-bottom:12px;">⚠️ 以下の操作は元に戻せません</p>
+      <button class="btn btn-secondary">📥 データをバックアップ（JSON）</button>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(s => s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('.type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const isIncome = btn.dataset.type === 'income';
+      document.getElementById('menuSelectRow').style.display = isIncome ? 'flex' : 'none';
+    });
+  });
+
+  document.querySelectorAll('.payment-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+    });
+  });
+
+  document.getElementById('previewMenu').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    if (!opt.value) return;
+    document.getElementById('previewAmount').value = opt.dataset.price;
+    document.getElementById('previewDesc').value   = opt.dataset.name;
+  });
+</script>
+</body>
+</html>
