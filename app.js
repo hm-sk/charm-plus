@@ -1,17 +1,16 @@
 /**
  * サロン家計簿 - メインアプリケーション
- * Version: 1.3.0 (Phase 2: 編集・CSVエクスポート・テンプレート・論理削除)
+ * Version: 1.4.0 (オンライン専用モード: GAS優先・オフライン入力禁止)
  *
  * ─ アーキテクチャ概要 ─────────────────────────
  *  GasAPI    … Google Apps Script Web API との HTTP 通信
- *  Sync      … オフラインキュー管理・オンライン復帰時の自動同期
- *  Storage   … localStorage の読み書き（GAS キャッシュ兼用）
- *  Data      … CRUD 操作（トランザクション管理）
+ *  Storage   … localStorage の読み書き（GAS取得後のキャッシュ）
+ *  Data      … CRUD 操作（GAS優先・成功後にlocalStorage更新）
  *  Templates … テンプレート管理（localStorage のみ）
  *  Calculator … 残高・集計ロジック
  *  Format    … 表示用フォーマット変換
  *  Charts    … Chart.js グラフ描画
- *  UI        … タブ切り替え・画面描画・イベント処理
+ *  UI        … タブ切り替え・画面描画・イベント処理・オフライン検知
  * ─────────────────────────────────────────────
  */
 
@@ -21,12 +20,11 @@
    定数・マスターデータ
    ============================================= */
 
-const APP_VERSION       = '1.2.0';
-const STORAGE_KEY       = 'salon_kaikei_v1_transactions';
-const SETTINGS_KEY      = 'salon_kaikei_v1_settings';
-const GAS_URL_KEY       = 'salon_kaikei_gas_url';
-const OFFLINE_QUEUE_KEY = 'salon_kaikei_offline_queue';
-const TEMPLATES_KEY     = 'salon_kaikei_v1_templates';
+const APP_VERSION   = '1.4.0';
+const STORAGE_KEY   = 'salon_kaikei_v1_transactions';
+const SETTINGS_KEY  = 'salon_kaikei_v1_settings';
+const GAS_URL_KEY   = 'salon_kaikei_gas_url';
+const TEMPLATES_KEY = 'salon_kaikei_v1_templates';
 
 /** 勘定科目マスター（青色申告決算書準拠） */
 const CATEGORIES = {
@@ -111,75 +109,6 @@ const GasAPI = {
     return this._post({ action: 'saveSettings', data: s });
   },
 
-  async syncQueue(items) {
-    return this._post({ action: 'syncQueue', items });
-  },
-};
-
-/* =============================================
-   Sync モジュール
-   オフライン時の一時保存 & オンライン復帰後の自動同期
-   ============================================= */
-const Sync = {
-  _syncing: false,
-
-  getQueue() {
-    try {
-      return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
-    } catch {
-      return [];
-    }
-  },
-
-  enqueue(action, payload) {
-    const queue = this.getQueue();
-    queue.push({ action, payload, queuedAt: new Date().toISOString() });
-    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
-    this._updateSyncBadge();
-  },
-
-  clearQueue() {
-    localStorage.removeItem(OFFLINE_QUEUE_KEY);
-    this._updateSyncBadge();
-  },
-
-  async sync() {
-    if (this._syncing || !GasAPI.isConfigured() || !navigator.onLine) return;
-    const queue = this.getQueue();
-    if (queue.length === 0) return;
-
-    this._syncing = true;
-    try {
-      await GasAPI.syncQueue(queue);
-      this.clearQueue();
-      console.log(`[Sync] オフラインキュー ${queue.length} 件を同期しました`);
-    } catch (e) {
-      console.warn('[Sync] 同期に失敗しました:', e.message);
-    } finally {
-      this._syncing = false;
-      this._updateSyncBadge();
-    }
-  },
-
-  _updateSyncBadge() {
-    const count = this.getQueue().length;
-    const badge = document.getElementById('syncBadge');
-    if (!badge) return;
-    if (count > 0) {
-      badge.textContent   = `未同期 ${count}件`;
-      badge.style.display = 'inline-block';
-    } else {
-      badge.style.display = 'none';
-    }
-  },
-
-  init() {
-    window.addEventListener('online', () => {
-      console.log('[Sync] オンラインに復帰 → 同期開始');
-      this.sync();
-    });
-    this._updateSyncBadge();
-  },
 };
 
 /* =============================================
@@ -233,53 +162,40 @@ const Storage = {
    Data モジュール（CRUD）
    ============================================= */
 const Data = {
-  /** 取引を追加して保存 */
-  add(transaction) {
-    const list = Storage.getTransactions();
+  /** 取引を追加（GAS優先・成功後にlocalStorageを更新） */
+  async add(transaction) {
+    if (!GasAPI.isConfigured()) throw new Error('GAS URLが設定されていません。設定タブで設定してください。');
     const record = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       ...transaction,
       createdAt: new Date().toISOString(),
     };
+    await GasAPI.addTransaction(record); // 失敗時は例外をスロー
+    const list = Storage.getTransactions();
     list.unshift(record);
     Storage.saveTransactions(list);
-
-    if (GasAPI.isConfigured()) {
-      GasAPI.addTransaction(record).catch(() => {
-        Sync.enqueue('addTransaction', record);
-      });
-    }
     return record;
   },
 
-  /** ID で更新（localStorage + GAS） */
-  update(updated) {
+  /** ID で更新（GAS優先・成功後にlocalStorageを更新） */
+  async update(updated) {
+    if (!GasAPI.isConfigured()) throw new Error('GAS URLが設定されていません。設定タブで設定してください。');
     const list = Storage.getTransactions();
     const idx  = list.findIndex(t => t.id === updated.id);
-    if (idx === -1) return null;
-
-    list[idx] = { ...list[idx], ...updated, updatedAt: new Date().toISOString() };
+    if (idx === -1) throw new Error('取引が見つかりません');
+    const merged = { ...list[idx], ...updated, updatedAt: new Date().toISOString() };
+    await GasAPI.updateTransaction(merged); // 失敗時は例外をスロー
+    list[idx] = merged;
     Storage.saveTransactions(list);
-
-    if (GasAPI.isConfigured()) {
-      GasAPI.updateTransaction(list[idx]).catch(() => {
-        Sync.enqueue('updateTransaction', list[idx]);
-      });
-    }
-    return list[idx];
+    return merged;
   },
 
-  /** ID で削除。GAS 削除失敗時は onGasError コールバックを呼ぶ */
-  remove(id, onGasError) {
+  /** ID で削除（GAS優先・成功後にlocalStorageを更新） */
+  async remove(id) {
+    if (!GasAPI.isConfigured()) throw new Error('GAS URLが設定されていません。設定タブで設定してください。');
+    await GasAPI.deleteTransaction(id); // 失敗時は例外をスロー
     const list = Storage.getTransactions().filter(t => t.id !== id);
     Storage.saveTransactions(list);
-
-    if (GasAPI.isConfigured()) {
-      GasAPI.deleteTransaction(id).catch(err => {
-        Sync.enqueue('deleteTransaction', { id });
-        if (typeof onGasError === 'function') onGasError(err);
-      });
-    }
   },
 
   /** 全件取得 */
@@ -720,12 +636,18 @@ const UI = {
     `;
 
     if (showActions) {
-      div.querySelector('.edit-btn').addEventListener('click', () => {
-        this._loadForEdit(t.id);
-      });
-      div.querySelector('.delete-btn').addEventListener('click', () => {
-        this._openDeleteModal(t.id, t.description);
-      });
+      const editBtn = div.querySelector('.edit-btn');
+      const delBtn  = div.querySelector('.delete-btn');
+      if (!navigator.onLine) {
+        editBtn.disabled = true;
+        editBtn.style.opacity = '0.4';
+        editBtn.style.cursor  = 'not-allowed';
+        delBtn.disabled  = true;
+        delBtn.style.opacity  = '0.4';
+        delBtn.style.cursor   = 'not-allowed';
+      }
+      editBtn.addEventListener('click', () => { this._loadForEdit(t.id); });
+      delBtn.addEventListener('click', () => { this._openDeleteModal(t.id, t.description); });
     }
     return div;
   },
@@ -903,8 +825,8 @@ const UI = {
       section.innerHTML = `
         <h3 class="card-title">🔗 Google スプレッドシート連携</h3>
         <p style="font-size:13px;color:#6B7280;margin-bottom:12px;line-height:1.6">
-          GAS Web アプリの URL を設定すると、データがスプレッドシートに自動保存されます。<br>
-          オフライン時は端末に一時保存し、オンライン復帰時に自動で同期します。
+          GAS Web アプリの URL を設定すると、データがスプレッドシートにリアルタイムで保存されます。<br>
+          オフライン中は入力・編集・削除ができません。オンライン環境でご利用ください。
         </p>
         <div class="form-group">
           <label class="form-label" for="gasUrl">GAS Web アプリ URL</label>
@@ -1246,7 +1168,7 @@ const UI = {
     );
   },
 
-  _submitRecord() {
+  async _submitRecord() {
     const date          = document.getElementById('inputDate').value;
     const amountRaw     = document.getElementById('inputAmount').value;
     const category      = document.getElementById('inputCategory').value;
@@ -1263,27 +1185,31 @@ const UI = {
       return;
     }
 
-    const payload = { date, amount, category, description, paymentMethod, type: this.currentType };
+    const payload    = { date, amount, category, description, paymentMethod, type: this.currentType };
+    const submitBtn  = document.querySelector('#recordForm button[type="submit"]');
+    const origLabel  = submitBtn ? submitBtn.textContent : '';
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '保存中...'; }
 
-    if (this._editMode && this._editingId) {
-      // 編集モード → 更新
-      Data.update({ id: this._editingId, ...payload });
-      this._cancelEdit();
-      const gasNote = GasAPI.isConfigured()
-        ? (navigator.onLine ? '（スプレッドシートも更新中）' : '（オフライン：後で同期）')
-        : '';
-      this._showMsg('formMessage', `✅ 内容を更新しました！ ${gasNote}`, 'success');
-    } else {
-      // 新規追加
-      Data.add(payload);
-      document.getElementById('inputAmount').value      = '';
-      document.getElementById('inputDescription').value = '';
-      document.getElementById('inputDate').value        = this._todayStr();
-      const label   = this.currentType === 'income' ? '売上' : '経費';
-      const gasNote = GasAPI.isConfigured()
-        ? (navigator.onLine ? '（スプレッドシートにも保存中）' : '（オフライン：後で同期）')
-        : '';
-      this._showMsg('formMessage', `✅ ${label}を記録しました！ ${gasNote}`, 'success');
+    try {
+      if (this._editMode && this._editingId) {
+        // 編集モード → 更新
+        await Data.update({ id: this._editingId, ...payload });
+        this._cancelEdit();
+        this._showMsg('formMessage', '✅ 内容を更新しました！', 'success');
+      } else {
+        // 新規追加
+        const label = this.currentType === 'income' ? '売上' : '経費';
+        await Data.add(payload);
+        document.getElementById('inputAmount').value      = '';
+        document.getElementById('inputDescription').value = '';
+        document.getElementById('inputDate').value        = this._todayStr();
+        this._showMsg('formMessage', `✅ ${label}を記録しました！`, 'success');
+      }
+      this.renderDashboard();
+    } catch (e) {
+      this._showMsg('formMessage', `❌ 保存に失敗しました: ${e.message}`, 'error');
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = origLabel; }
     }
 
     setTimeout(() => {
@@ -1319,19 +1245,16 @@ const UI = {
     const newBtn = oldBtn.cloneNode(true);
     oldBtn.replaceWith(newBtn);
 
-    newBtn.addEventListener('click', () => {
-      // 先にモーダルを閉じて即時応答
+    newBtn.addEventListener('click', async () => {
       this._closeModal();
-
-      // localStorage 削除は同期的に完了。GAS 失敗時はトースト通知
-      Data.remove(id, () => {
-        this._showToast('⚠️ スプレッドシートへの反映に失敗しました。次回オンライン時に自動同期されます。');
-      });
-
-      // UI を更新（GAS の成否に関わらず即時反映）
-      this._applyFilters();
-      if (document.getElementById('tab-dashboard').classList.contains('active')) {
-        this.renderDashboard();
+      try {
+        await Data.remove(id);
+        this._applyFilters();
+        if (document.getElementById('tab-dashboard').classList.contains('active')) {
+          this.renderDashboard();
+        }
+      } catch (e) {
+        this._showToast(`❌ 削除に失敗しました: ${e.message}`);
       }
     });
 
@@ -1346,7 +1269,12 @@ const UI = {
 
   /** 画面上部にトースト通知を表示（4秒後に自動消去） */
   _showToast(msg, type = 'error') {
-    const isErr = type === 'error';
+    const styles = {
+      error: { bg: '#FEE2E2', color: '#DC2626', border: '#FCA5A5' },
+      success: { bg: '#D1FAE5', color: '#065F46', border: '#6EE7B7' },
+      warn:  { bg: '#FEF3C7', color: '#92400E', border: '#FCD34D' },
+    };
+    const s = styles[type] || styles.error;
     const toast = document.createElement('div');
     toast.style.cssText = [
       'position:fixed',
@@ -1354,9 +1282,9 @@ const UI = {
       'left:50%',
       'transform:translateX(-50%)',
       'max-width:90vw',
-      'background:' + (isErr ? '#FEE2E2' : '#D1FAE5'),
-      'color:'       + (isErr ? '#DC2626' : '#065F46'),
-      'border:1px solid ' + (isErr ? '#FCA5A5' : '#6EE7B7'),
+      `background:${s.bg}`,
+      `color:${s.color}`,
+      `border:1px solid ${s.border}`,
       'border-radius:8px',
       'padding:10px 20px',
       'z-index:2000',
@@ -1428,7 +1356,6 @@ const UI = {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(SETTINGS_KEY);
         localStorage.removeItem(TEMPLATES_KEY);
-        Sync.clearQueue();
         window.location.reload();
       }
     });
@@ -1470,25 +1397,62 @@ const UI = {
     el.style.display = 'block';
   },
 
-  _injectSyncBadge() {
-    if (document.getElementById('syncBadge')) return;
-    const subtitle = document.getElementById('headerSubtitle');
-    if (!subtitle) return;
-    const badge = document.createElement('span');
-    badge.id = 'syncBadge';
-    badge.style.cssText = [
-      'display:none',
-      'margin-left:8px',
-      'font-size:11px',
-      'background:#FEF3C7',
-      'color:#92400E',
-      'border:1px solid #FCD34D',
-      'border-radius:9999px',
-      'padding:2px 8px',
-      'vertical-align:middle',
-      'font-weight:600',
-    ].join(';');
-    subtitle.parentNode.insertBefore(badge, subtitle.nextSibling);
+  /* ─── オフライン検知 ────────────────────── */
+
+  initOfflineDetection() {
+    window.addEventListener('online',  async () => {
+      this._setOnlineState(true);
+      // オンライン復帰時に GAS からデータを再取得してキャッシュを更新
+      if (GasAPI.isConfigured()) {
+        await Storage.loadFromGas();
+        this.renderDashboard();
+        if (document.getElementById('tab-list')?.classList.contains('active')) {
+          this.renderList();
+        }
+      }
+    });
+    window.addEventListener('offline', () => this._setOnlineState(false));
+    if (!navigator.onLine) this._setOnlineState(false);
+  },
+
+  _setOnlineState(isOnline) {
+    // オフラインバナーの表示・非表示
+    let banner = document.getElementById('offlineBanner');
+    if (!isOnline && !banner) {
+      banner = document.createElement('div');
+      banner.id = 'offlineBanner';
+      banner.style.cssText = [
+        'background:#FEF3C7',
+        'color:#92400E',
+        'border-bottom:2px solid #FCD34D',
+        'text-align:center',
+        'padding:10px 16px',
+        'font-size:13px',
+        'font-weight:600',
+        'width:100%',
+        'box-sizing:border-box',
+      ].join(';');
+      banner.textContent = '📵 オフライン中は入力・編集・削除ができません';
+      const nav = document.querySelector('nav') || document.querySelector('header');
+      if (nav && nav.parentNode) {
+        nav.parentNode.insertBefore(banner, nav.nextSibling);
+      } else {
+        document.body.prepend(banner);
+      }
+    } else if (isOnline && banner) {
+      banner.remove();
+    }
+
+    // フォーム送信ボタン
+    const submitBtn = document.querySelector('#recordForm button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = !isOnline;
+
+    // 動的生成済みの編集・削除ボタン
+    document.querySelectorAll('.edit-btn, .delete-btn').forEach(btn => {
+      btn.disabled     = !isOnline;
+      btn.style.opacity = isOnline ? '' : '0.4';
+      btn.style.cursor  = isOnline ? '' : 'not-allowed';
+    });
   },
 };
 
@@ -1498,14 +1462,12 @@ const UI = {
 async function init() {
   UI.initTabs();
   UI.initForm();
-  UI.initTemplates();   // ← Phase 2 追加
+  UI.initTemplates();
   UI.initModal();
   UI.initSettings();
   UI.initFilters();
   UI.initSummaryYear();
-
-  UI._injectSyncBadge();
-  Sync.init();
+  UI.initOfflineDetection();
 
   const settings = Storage.getSettings();
   if (settings.businessName && settings.businessName !== 'マイサロン') {
@@ -1513,14 +1475,19 @@ async function init() {
       settings.businessName + '  ┊  青色申告対応';
   }
 
+  // キャッシュを使って即時表示
   UI.renderDashboard();
 
-  if (GasAPI.isConfigured() && navigator.onLine) {
+  if (!GasAPI.isConfigured()) {
+    // GAS URL未設定時は設定タブへ誘導するトーストを表示
+    UI._showToast('⚙️ 設定タブで GAS Web アプリ URL を設定してください', 'warn');
+    return;
+  }
+
+  if (navigator.onLine) {
+    // GAS からデータを取得してキャッシュを更新
     const loaded = await Storage.loadFromGas();
-    if (loaded) {
-      UI.renderDashboard();
-      await Sync.sync();
-    }
+    if (loaded) UI.renderDashboard();
   }
 }
 
