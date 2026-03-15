@@ -220,18 +220,28 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
           </div>
           <div class="form-group">
             <label>金額（円）</label>
-            <input type="number" placeholder="例：5000">
+            <input type="number" id="previewAmount" placeholder="例：5000">
           </div>
+        </div>
+        <div id="menuSelectRow" class="form-group">
+          <label for="previewMenu">メニューから選択 <small>（金額・科目を自動入力）</small></label>
+          <select id="previewMenu">
+            <option value="">-- メニューから選択（省略可） --</option>
+            <option value="1" data-price="7000" data-name="ジェルネイル（ワンカラー）">ジェルネイル（ワンカラー）（¥7,000）</option>
+            <option value="2" data-price="10000" data-name="ジェルネイル（アート）">ジェルネイル（アート）（¥10,000）</option>
+            <option value="3" data-price="8000" data-name="まつエク（120本）">まつエク（120本）（¥8,000）</option>
+            <option value="4" data-price="11000" data-name="まつエク（160本）">まつエク（160本）（¥11,000）</option>
+          </select>
         </div>
         <div class="form-group">
           <label>勘定科目 <small>（青色申告の科目名）</small></label>
-          <select>
+          <select id="previewCategory">
             <option>売上</option>
           </select>
         </div>
         <div class="form-group">
           <label>内容・メモ</label>
-          <input type="text" placeholder="例：ジェルネイル施術 3名分">
+          <input type="text" id="previewDesc" placeholder="例：ジェルネイル施術 3名分">
         </div>
         <div class="form-group">
           <label>支払い方法</label>
@@ -345,7 +355,42 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
         <button class="btn btn-primary btn-full">保存する</button>
       </div>
     </div>
-    <div class="card" style="border:1px solid #E8D8D8;">
+
+    <div class="card form-card" style="margin-top:16px;">
+      <h2 class="section-title">メニュー管理</h2>
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:12px;">記録フォームで選択すると金額・科目を自動入力します</p>
+      <div id="menuList">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span style="flex:1;font-size:13px;">ジェルネイル（ワンカラー）</span>
+          <span style="font-size:13px;font-family:var(--font-serif);color:var(--accent);">¥7,000</span>
+          <button style="background:none;border:1px solid #FECACA;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span style="flex:1;font-size:13px;">ジェルネイル（アート）</span>
+          <span style="font-size:13px;font-family:var(--font-serif);color:var(--accent);">¥10,000</span>
+          <button style="background:none;border:1px solid #FECACA;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span style="flex:1;font-size:13px;">まつエク（120本）</span>
+          <span style="font-size:13px;font-family:var(--font-serif);color:var(--accent);">¥8,000</span>
+          <button style="background:none;border:1px solid #FECACA;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span style="flex:1;font-size:13px;">まつエク（160本）</span>
+          <span style="font-size:13px;font-family:var(--font-serif);color:var(--accent);">¥11,000</span>
+          <button style="background:none;border:1px solid #FECACA;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 100px auto;gap:8px;margin-top:12px;align-items:start;">
+        <input type="text" placeholder="メニュー名（例：ジェルネイル）"
+          style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);">
+        <input type="number" placeholder="金額"
+          style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);">
+        <button class="btn btn-primary" style="font-size:13px;padding:8px 14px;white-space:nowrap;">追加</button>
+      </div>
+    </div>
+
+    <div class="card" style="border:1px solid #E8D8D8;margin-top:16px;">
       <h2 class="section-title">データ管理</h2>
       <p style="font-size:0.8rem;color:#9A5E5E;background:#F5EDED;padding:8px 12px;border-radius:6px;margin-bottom:12px;">⚠️ 以下の操作は元に戻せません</p>
       <button class="btn btn-secondary">📥 データをバックアップ（JSON）</button>
@@ -355,6 +400,7 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
 </main>
 
 <script>
+  // タブ切り替え
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -363,17 +409,32 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
       document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     });
   });
+
+  // 収入/支出 切り替え
   document.querySelectorAll('.type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      const isIncome = btn.dataset.type === 'income';
+      document.getElementById('menuSelectRow').style.display = isIncome ? 'block' : 'none';
+      if (!isIncome) document.getElementById('previewMenu').value = '';
     });
   });
+
+  // 支払方法 選択
   document.querySelectorAll('.payment-option').forEach(opt => {
     opt.addEventListener('click', () => {
       document.querySelectorAll('.payment-option').forEach(o => o.classList.remove('selected'));
       opt.classList.add('selected');
     });
+  });
+
+  // メニュー選択 → 自動入力
+  document.getElementById('previewMenu').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    if (!opt.value) return;
+    document.getElementById('previewAmount').value = opt.dataset.price;
+    document.getElementById('previewDesc').value   = opt.dataset.name;
   });
 </script>
 </body>
