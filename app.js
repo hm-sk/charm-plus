@@ -451,6 +451,20 @@ const Master = {
     this._setRaw({ ...this._raw(), tags });
   },
 
+  /** メニュー一覧（名前・価格・カテゴリ） */
+  getMenus() {
+    return this._raw().menus || [
+      { id: 'menu_default_1', name: 'ジェルネイル（ワンカラー）', price: 7000,  category: '売上' },
+      { id: 'menu_default_2', name: 'ジェルネイル（アート）',     price: 10000, category: '売上' },
+      { id: 'menu_default_3', name: 'まつエク（120本）',          price: 8000,  category: '売上' },
+      { id: 'menu_default_4', name: 'まつエク（160本）',          price: 11000, category: '売上' },
+    ];
+  },
+
+  saveMenus(menus) {
+    this._setRaw({ ...this._raw(), menus });
+  },
+
   /** GASから取得したデータを反映 */
   loadFromData(data) {
     if (!data || typeof data !== 'object') return;
@@ -1118,6 +1132,7 @@ const UI = {
 
     this._injectAllocationSection();
     this._injectAutoRulesSection();
+    this._injectMenuSection();
     this._injectCategorySection();
     this._injectPaymentMethodSection();
     this._injectTagSection();
@@ -1600,6 +1615,77 @@ const UI = {
     });
   },
 
+  /* ─── メニュー管理 ──────────────────── */
+
+  _injectMenuSection() {
+    if (document.getElementById('menuMgmtSection')) {
+      this._renderMenuSection();
+      return;
+    }
+    const danger = document.querySelector('.danger-zone');
+    const section = document.createElement('div');
+    section.id        = 'menuMgmtSection';
+    section.className = 'card form-card';
+    section.style.cssText = 'margin-top:16px;';
+    danger.parentNode.insertBefore(section, danger);
+    this._renderMenuSection();
+  },
+
+  _renderMenuSection() {
+    const section = document.getElementById('menuMgmtSection');
+    if (!section) return;
+    const menus = Master.getMenus();
+
+    const listHtml = menus.map(m => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+        <span style="flex:1;font-size:13px;">${this._esc(m.name)}</span>
+        <span style="font-size:13px;font-family:var(--font-serif);color:var(--accent);">¥${Number(m.price).toLocaleString()}</span>
+        <button class="del-menu-btn" data-id="${this._esc(m.id)}"
+          style="background:none;border:1px solid #FECACA;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;">削除</button>
+      </div>`).join('');
+
+    section.innerHTML = `
+      <h2 class="section-title">メニュー管理</h2>
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:12px;">記録フォームで選択すると金額・科目を自動入力します</p>
+      <div id="menuList">${listHtml || '<p style="font-size:13px;color:var(--text-light);">メニューがありません</p>'}</div>
+      <div style="display:grid;grid-template-columns:1fr 100px auto;gap:8px;margin-top:12px;align-items:start;">
+        <input type="text" id="newMenuName" placeholder="メニュー名（例：ジェルネイル）" maxlength="30"
+          style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);">
+        <input type="number" id="newMenuPrice" placeholder="金額" min="1" step="1"
+          style="border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-family:var(--font-sans);">
+        <button type="button" id="addMenuBtn" class="btn btn-primary" style="font-size:13px;padding:8px 14px;white-space:nowrap;">追加</button>
+      </div>
+      <div id="menuMsg" class="form-message" style="display:none;margin-top:8px;"></div>
+    `;
+
+    section.querySelectorAll('.del-menu-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const menus2 = Master.getMenus().filter(m => m.id !== btn.dataset.id);
+        Master.saveMenus(menus2);
+        this._renderMenuSection();
+        this._rebuildMenuOptions();
+        this._saveMasterToGas();
+      });
+    });
+
+    document.getElementById('addMenuBtn').addEventListener('click', () => {
+      const name  = document.getElementById('newMenuName').value.trim();
+      const price = Number(document.getElementById('newMenuPrice').value);
+      if (!name)        { this._showMsg('menuMsg', '⚠️ メニュー名を入力してください', 'error'); return; }
+      if (!price || price <= 0) { this._showMsg('menuMsg', '⚠️ 金額を正しく入力してください', 'error'); return; }
+      const menus2 = Master.getMenus();
+      if (menus2.find(m => m.name === name)) { this._showMsg('menuMsg', '⚠️ 同じ名前のメニューが既にあります', 'error'); return; }
+      menus2.push({ id: `menu_${Date.now()}`, name, price, category: '売上' });
+      Master.saveMenus(menus2);
+      document.getElementById('newMenuName').value  = '';
+      document.getElementById('newMenuPrice').value = '';
+      this._renderMenuSection();
+      this._rebuildMenuOptions();
+      this._saveMasterToGas();
+      this._showMsg('menuMsg', `✅「${name}」を追加しました`, 'success');
+    });
+  },
+
   /** 支払方法の radio ボタンを動的に再構築 */
   _rebuildPaymentMethodOptions() {
     const group = document.getElementById('paymentMethodGroup');
@@ -1660,11 +1746,30 @@ const UI = {
         btn.classList.add('active');
         this._rebuildCategoryOptions();
         this._updateAllocationDisplay();
+        const menuRow = document.getElementById('menuSelectRow');
+        if (menuRow) menuRow.style.display = this.currentType === 'income' ? 'block' : 'none';
+        const menuSel = document.getElementById('inputMenuSelect');
+        if (menuSel) menuSel.value = '';
       });
     });
 
     this._rebuildPaymentMethodOptions();
     this._rebuildCategoryOptions();
+    this._rebuildMenuOptions();
+
+    // メニュー選択 → 金額・科目・説明を自動入力
+    const menuSel = document.getElementById('inputMenuSelect');
+    if (menuSel) {
+      menuSel.addEventListener('change', () => {
+        const opt = menuSel.options[menuSel.selectedIndex];
+        if (!opt.value) return;
+        document.getElementById('inputAmount').value      = opt.dataset.price;
+        document.getElementById('inputDescription').value = opt.dataset.name;
+        const catSel = document.getElementById('inputCategory');
+        if (catSel) catSel.value = opt.dataset.category;
+        this._updateAllocationDisplay();
+      });
+    }
 
     document.getElementById('inputAmount').addEventListener('input', () => {
       this._updateAllocationDisplay();
@@ -2046,6 +2151,22 @@ const UI = {
       sel.appendChild(opt);
     });
     if (this.currentType === 'income') sel.value = masterCats.income[0] || '売上';
+  },
+
+  _rebuildMenuOptions() {
+    const sel = document.getElementById('inputMenuSelect');
+    if (!sel) return;
+    const menus = Master.getMenus();
+    sel.innerHTML = '<option value="">-- メニューから選択（省略可） --</option>';
+    menus.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = `${m.name}（¥${Number(m.price).toLocaleString()}）`;
+      opt.dataset.price    = m.price;
+      opt.dataset.category = m.category;
+      opt.dataset.name     = m.name;
+      sel.appendChild(opt);
+    });
   },
 
   async _submitRecord() {
