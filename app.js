@@ -30,7 +30,7 @@ const MASTER_KEY       = 'salon_kaikei_v1_master';
 const CUSTOMERS_KEY     = 'charm_plus_customers';
 const APPOINTMENTS_KEY  = 'charm_plus_appointments';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwPJ4vodIXXLiozy8HnytXyrSh6PpuqvKCUGpFS-I_Jm-e2HdWVtl_UuukUOeFtCwif/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwC5E0baLlnde7ld3A6fF05bujuOb4C0NJMFNLJNOc96Q3lp1ilmNPcueD7tYvklBGn/exec';
 
 /** 勘定科目マスター（青色申告決算書準拠） */
 const CATEGORIES = {
@@ -81,6 +81,20 @@ const GasAPI = {
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     return json;
+  },
+
+  /** 汎用GETリクエスト */
+  async get(action) {
+    const res = await fetch(`${GAS_URL}?action=${encodeURIComponent(action)}`, { redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    return json;
+  },
+
+  /** 汎用POSTリクエスト */
+  async post(body) {
+    return this._post(body);
   },
 
   async fetchAll() {
@@ -139,8 +153,27 @@ const GasAPI = {
     return this._post({ action: 'deleteCustomer', id });
   },
 
+  async getKarte(customerId) {
+    const res = await fetch(`${GAS_URL}?action=getKarte&customerId=${encodeURIComponent(customerId)}`, { redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    return json.records || [];
+  },
+
+  async addKarte(data) {
+    return this._post({ action: 'addKarte', data });
+  },
+
+  async deleteKarte(id) {
+    return this._post({ action: 'deleteKarte', id });
+  },
+
   async getAppointments(from, to) {
-    const url = `${GAS_URL}?action=getAppointments&from=${from}&to=${to}`;
+    const params = new URLSearchParams({ action: 'getAppointments' });
+    if (from) params.set('from', from);
+    if (to)   params.set('to', to);
+    const url = `${GAS_URL}?${params.toString()}`;
     const res = await fetch(url, { redirect: 'follow' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
@@ -526,6 +559,15 @@ const Master = {
     this._setRaw({ ...this._raw(), bookingWindowDays: Number(days) || 60 });
   },
 
+  /** リピート来店の目安間隔（日数）*/
+  getVisitIntervalDays() {
+    return this._raw().visitIntervalDays || 28;
+  },
+
+  saveVisitIntervalDays(days) {
+    this._setRaw({ ...this._raw(), visitIntervalDays: Number(days) || 28 });
+  },
+
   saveMenus(menus) {
     this._setRaw({ ...this._raw(), menus });
   },
@@ -639,11 +681,9 @@ const Format = {
 
   date(dateStr) {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${y}/${m}/${dd}`;
+    // new Date("YYYY-MM-DD") は UTC 00:00 解釈のため JST 等で -1日ズレる。文字列を直接パース
+    const [y, m, d] = dateStr.substring(0, 10).split('-');
+    return `${y}/${m}/${d}`;
   },
 };
 
@@ -828,6 +868,7 @@ const UI = {
     if (forecastEl) forecastEl.textContent = Format.currency(forecast);
 
     this._renderTodaySchedule();
+    this._renderRepeatAlerts();
 
     const listEl = document.getElementById('recentList');
     listEl.innerHTML = '';
@@ -869,21 +910,77 @@ const UI = {
     }).join('');
   },
 
+  // リピートが近い・超過中の顧客をダッシュボードに表示
+  _renderRepeatAlerts() {
+    const el = document.getElementById('repeatAlertList');
+    if (!el) return;
+
+    const interval = Master.getVisitIntervalDays();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // lastVisit がある顧客を次回来店日順で並べ、14日以内or超過の人だけ表示
+    const alerts = CustomerData.getAll()
+      .filter(c => c.lastVisit)
+      .map(c => {
+        const last = new Date(c.lastVisit + 'T00:00:00');
+        const next = new Date(last);
+        next.setDate(next.getDate() + interval);
+        const diffDays = Math.round((next - today) / 86400000);
+        return { ...c, nextVisit: next.toISOString().split('T')[0], diffDays };
+      })
+      .filter(c => c.diffDays <= 14)
+      .sort((a, b) => a.diffDays - b.diffDays);
+
+    if (!alerts.length) {
+      el.innerHTML = '<p style="text-align:center;color:var(--text-light);font-size:13px;padding:20px 0;">直近14日以内のリピート対象者はいません</p>';
+      return;
+    }
+
+    el.innerHTML = alerts.map(c => {
+      const [, m, d] = c.nextVisit.split('-');
+      const label = `${Number(m)}月${Number(d)}日`;
+      const isOverdue = c.diffDays < 0;
+      const color = isOverdue ? 'var(--rose)' : (c.diffDays <= 7 ? 'var(--accent)' : 'var(--text-sub)');
+      const diffLabel = isOverdue
+        ? `${Math.abs(c.diffDays)}日超過`
+        : (c.diffDays === 0 ? '本日' : `あと${c.diffDays}日`);
+      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--accent-dim);
+                    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+                    font-family:var(--font-serif);font-size:1rem;color:var(--accent);font-weight:700;">
+          ${UI._esc((c.name || '？').charAt(0))}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:14px;">${UI._esc(c.name || '')}</div>
+          <div style="font-size:12px;color:var(--text-sub);">最終来店: ${UI._esc(c.lastVisit)} ／ ${c.visitCount || 0}回来店</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:13px;font-weight:700;color:${color};">${label}</div>
+          <div style="font-size:11px;color:${color};">${diffLabel}</div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
   /* ─── 収支一覧 ────────────────────────── */
 
   renderList() {
     this._rebuildFilterOptions();
+    this._bindFilterHandlers();   // DOM再構築後にハンドラを再代入
     this._applyFilters();
   },
 
   _rebuildFilterOptions() {
-    const months = new Set();
-    const tags   = new Set();
+    const months     = new Set();
+    const tags       = new Set();
+    const usedCats   = new Set();
     Data.getAll().forEach(t => {
       // 文字列から直接 YYYY-MM を取り出す（タイムゾーン問題を回避）
       if (t.date && t.date.length >= 7) {
         months.add(t.date.substring(0, 7));
       }
+      if (t.category) usedCats.add(t.category);
       if (Array.isArray(t.tags)) t.tags.forEach(tag => tag && tags.add(tag));
     });
 
@@ -899,11 +996,11 @@ const UI = {
     });
     monthSel.value = prevMonth;
 
-    const cats = Master.getCategories();
+    // 費目フィルター：実際に取引で使われている科目のみ表示
     const catSel = document.getElementById('filterCategory');
     const prevCat = catSel.value;
     catSel.innerHTML = '<option value="">科目すべて</option>';
-    [...cats.income, ...cats.expense].forEach(cat => {
+    [...usedCats].sort().forEach(cat => {
       const opt = document.createElement('option');
       opt.value = cat;
       opt.textContent = cat;
@@ -940,16 +1037,57 @@ const UI = {
     if (category) list = list.filter(t => t.category === category);
     if (tag)      list = list.filter(t => Array.isArray(t.tags) && t.tags.includes(tag));
 
+    // 日付降順（新しい順）にソート
+    list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    // リスト描画を先に行う（_updateFilterStatus の例外に影響されないよう）
     const listEl  = document.getElementById('transactionList');
     const emptyEl = document.getElementById('listEmpty');
+    if (!listEl || !emptyEl) return;
     listEl.innerHTML = '';
-
     if (list.length === 0) {
       emptyEl.style.display = 'block';
     } else {
       emptyEl.style.display = 'none';
       list.forEach(t => listEl.appendChild(this._buildItem(t, true)));
     }
+
+    // フィルター状態バーを更新（後処理なので例外があっても一覧には影響しない）
+    const total      = Data.getAll().length;
+    const isFiltered = !!(month || type || category || tag);
+    try { this._updateFilterStatus(isFiltered, list.length, total); } catch (_) { /* noop */ }
+  },
+
+  /** フィルター状態バーの表示・非表示を切り替え */
+  _updateFilterStatus(isFiltered, count, total) {
+    let bar = document.getElementById('filterStatusBar');
+    if (!isFiltered) {
+      if (bar) bar.style.display = 'none';
+      return;
+    }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'filterStatusBar';
+      bar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;' +
+        'background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:8px 14px;' +
+        'margin-bottom:12px;font-size:13px;color:#1D4ED8;';
+      const filterBar = document.querySelector('.filter-bar');
+      if (filterBar) filterBar.parentNode.insertBefore(bar, filterBar.nextSibling);
+    }
+    bar.style.display = 'flex';
+    bar.innerHTML = `
+      <span>絞り込み中：${count} 件 / 全 ${total} 件</span>
+      <button id="filterResetBtn" style="background:none;border:1px solid #93C5FD;border-radius:6px;
+        padding:3px 10px;font-size:12px;color:#1D4ED8;cursor:pointer;">リセット</button>
+    `;
+    bar.querySelector('#filterResetBtn').addEventListener('click', () => {
+      document.getElementById('filterMonth').value    = '';
+      document.getElementById('filterType').value     = '';
+      document.getElementById('filterCategory').value = '';
+      const tagSel = document.getElementById('filterTag');
+      if (tagSel) tagSel.value = '';
+      this._applyFilters();
+    });
   },
 
   /* ─── 取引アイテム DOM 生成 ──────────── */
@@ -1243,6 +1381,7 @@ const UI = {
     this._injectCategorySection();
     this._injectPaymentMethodSection();
     this._injectTagSection();
+    this._injectBackupSection();
   },
 
   /* ─── 家事按分設定 ──────────────────── */
@@ -1722,6 +1861,210 @@ const UI = {
     });
   },
 
+  /* ─── データ保護・バックアップ管理 ───── */
+
+  _injectBackupSection() {
+    if (!GasAPI.isConfigured()) return; // GAS未設定時はスキップ
+
+    if (document.getElementById('backupSection')) {
+      this._renderBackupSection();
+      return;
+    }
+    const danger = document.querySelector('.danger-zone');
+    const section = document.createElement('div');
+    section.id        = 'backupSection';
+    section.className = 'card form-card';
+    section.style.cssText = 'margin-top:16px;';
+    danger.parentNode.insertBefore(section, danger);
+    this._renderBackupSection();
+  },
+
+  async _renderBackupSection() {
+    const section = document.getElementById('backupSection');
+    if (!section) return;
+
+    section.innerHTML = `
+      <h2 class="section-title">データ保護・バックアップ</h2>
+      <p style="font-size:13px;color:#6B7280;margin-bottom:16px;line-height:1.6">
+        スプレッドシートの直接編集ロックと、Driveへの自動バックアップを管理します。
+      </p>
+      <div id="backupStatusArea" style="margin-bottom:16px;">
+        <div style="text-align:center;padding:16px;color:#6B7280;font-size:13px;">読み込み中...</div>
+      </div>
+    `;
+
+    // ステータスを取得
+    try {
+      const status = await GasAPI.get('getBackupStatus');
+      this._renderBackupControls(status);
+    } catch (e) {
+      document.getElementById('backupStatusArea').innerHTML =
+        '<div style="color:#EF4444;font-size:13px;">⚠️ ステータスの取得に失敗しました: ' + this._esc(e.message) + '</div>';
+    }
+  },
+
+  _renderBackupControls(status) {
+    const area = document.getElementById('backupStatusArea');
+    if (!area) return;
+
+    const bp = status.backup || {};
+    const pt = status.protection || {};
+    const allProtected = Object.values(pt).every(v => v === true);
+    const protectedCount = Object.values(pt).filter(v => v === true).length;
+    const totalSheets = Object.keys(pt).length;
+
+    const lastBackup = bp.lastBackup
+      ? new Date(bp.lastBackup).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+      : 'なし';
+
+    area.innerHTML = `
+      <!-- シート保護 -->
+      <div style="border:1px solid #E5E7EB;border-radius:8px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-weight:600;font-size:14px;">シート保護</div>
+          <span style="font-size:12px;padding:2px 8px;border-radius:4px;
+            background:${allProtected ? '#DEF7EC' : '#FEF3C7'};
+            color:${allProtected ? '#03543F' : '#92400E'};">
+            ${allProtected ? '有効' : protectedCount + '/' + totalSheets + ' 保護中'}
+          </span>
+        </div>
+        <p style="font-size:12px;color:#6B7280;margin-bottom:10px;">
+          スプレッドシート上での直接編集を防止します。アプリ経由の操作のみ許可されます。
+        </p>
+        <button type="button" id="setupProtectionBtn" class="btn btn-secondary" style="width:100%;font-size:13px;">
+          ${allProtected ? '保護を再適用する' : '全シートに保護を適用する'}
+        </button>
+      </div>
+
+      <!-- バックアップ設定 -->
+      <div style="border:1px solid #E5E7EB;border-radius:8px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-weight:600;font-size:14px;">自動バックアップ</div>
+          <span style="font-size:12px;padding:2px 8px;border-radius:4px;
+            background:${bp.triggerActive ? '#DEF7EC' : '#FEE2E2'};
+            color:${bp.triggerActive ? '#03543F' : '#991B1B'};">
+            ${bp.triggerActive ? '有効（毎日3:00）' : '無効'}
+          </span>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:#6B7280;display:block;margin-bottom:4px;">バックアップ先フォルダ</label>
+          <input type="text" id="backupFolderPath" value="${this._esc(bp.folderPath || 'charm+ バックアップ')}"
+            placeholder="charm+ バックアップ"
+            style="width:100%;border:1px solid #E5E7EB;border-radius:6px;padding:6px 10px;font-size:13px;box-sizing:border-box;">
+          <p style="font-size:11px;color:#9CA3AF;margin-top:4px;">
+            Google Driveのルートからのパス（例: サロン/バックアップ）
+          </p>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:#6B7280;display:block;margin-bottom:4px;">保持世代数</label>
+          <input type="number" id="backupMaxKeep" value="${bp.maxKeep || 30}" min="1" max="365"
+            style="width:80px;border:1px solid #E5E7EB;border-radius:6px;padding:6px 10px;font-size:13px;">
+          <span style="font-size:12px;color:#6B7280;margin-left:4px;">件（古いバックアップは自動削除）</span>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button type="button" id="toggleBackupTriggerBtn" class="btn ${bp.triggerActive ? 'btn-danger' : 'btn-primary'}" style="flex:1;font-size:13px;">
+            ${bp.triggerActive ? '自動バックアップを停止' : '自動バックアップを開始'}
+          </button>
+          <button type="button" id="saveBackupSettingsBtn" class="btn btn-secondary" style="font-size:13px;">
+            設定保存
+          </button>
+        </div>
+
+        <!-- ステータス表示 -->
+        <div style="background:#F9FAFB;border-radius:6px;padding:10px;font-size:12px;color:#6B7280;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span>最終バックアップ:</span>
+            <span style="font-weight:500;color:#374151;">${lastBackup}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span>バックアップ数:</span>
+            <span style="font-weight:500;color:#374151;">${bp.backupCount || 0} 件</span>
+          </div>
+          ${bp.folderUrl ? `<div style="margin-top:6px;"><a href="${bp.folderUrl}" target="_blank" rel="noopener" style="color:var(--gold);font-size:12px;text-decoration:underline;">Driveのバックアップフォルダを開く ↗</a></div>` : ''}
+        </div>
+      </div>
+
+      <!-- 手動バックアップ -->
+      <button type="button" id="manualBackupBtn" class="btn btn-secondary" style="width:100%;font-size:13px;">
+        今すぐバックアップを作成する
+      </button>
+      <div id="backupMsg" class="form-message" style="display:none;margin-top:8px;"></div>
+    `;
+
+    // イベントリスナー
+    document.getElementById('setupProtectionBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('setupProtectionBtn');
+      btn.disabled = true;
+      btn.textContent = '適用中...';
+      try {
+        await GasAPI.post({ action: 'setupProtection' });
+        this._showMsg('backupMsg', '✅ 全シートに保護を適用しました', 'success');
+        this._renderBackupSection(); // 状態を再読み込み
+      } catch (e) {
+        this._showMsg('backupMsg', '❌ 保護の適用に失敗: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = '再試行';
+      }
+    });
+
+    document.getElementById('toggleBackupTriggerBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('toggleBackupTriggerBtn');
+      const action = bp.triggerActive ? 'removeBackupTrigger' : 'setupBackupTrigger';
+      btn.disabled = true;
+      btn.textContent = '処理中...';
+      try {
+        const res = await GasAPI.post({ action });
+        this._showMsg('backupMsg', '✅ ' + (res.message || '完了'), 'success');
+        this._renderBackupSection();
+      } catch (e) {
+        this._showMsg('backupMsg', '❌ ' + e.message, 'error');
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('saveBackupSettingsBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('saveBackupSettingsBtn');
+      btn.disabled = true;
+      try {
+        await GasAPI.post({
+          action: 'saveBackupSettings',
+          data: {
+            folderPath: document.getElementById('backupFolderPath').value.trim() || 'charm+ バックアップ',
+            maxKeep: Number(document.getElementById('backupMaxKeep').value) || 30,
+          }
+        });
+        this._showMsg('backupMsg', '✅ バックアップ設定を保存しました', 'success');
+      } catch (e) {
+        this._showMsg('backupMsg', '❌ ' + e.message, 'error');
+      }
+      btn.disabled = false;
+    });
+
+    document.getElementById('manualBackupBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('manualBackupBtn');
+      btn.disabled = true;
+      btn.textContent = 'バックアップ作成中...';
+      try {
+        const res = await GasAPI.post({ action: 'createBackup' });
+        this._showMsg('backupMsg', '✅ バックアップを作成しました: ' + (res.backupName || ''), 'success');
+        this._renderBackupSection();
+      } catch (e) {
+        this._showMsg('backupMsg', '❌ バックアップ失敗: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = '今すぐバックアップを作成する';
+      }
+    });
+
+    // メッセージ自動非表示
+    setTimeout(() => {
+      const el = document.getElementById('backupMsg');
+      if (el) el.style.display = 'none';
+    }, 5000);
+  },
+
   /* ─── メニュー管理 ──────────────────── */
 
   _injectMenuSection() {
@@ -1876,6 +2219,13 @@ const UI = {
         <span style="font-size:12px;color:var(--text-sub);">日先まで受け付ける（7〜365）</span>
       </div>
 
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+        <label style="font-size:13px;font-weight:700;white-space:nowrap;">リピート目安間隔</label>
+        <input type="number" id="visitIntervalDays" value="${Master.getVisitIntervalDays()}" min="7" max="180" step="1"
+          style="${inputStyle} width:70px;">
+        <span style="font-size:12px;color:var(--text-sub);">日（ダッシュボードの来店提案に使用）</span>
+      </div>
+
       <div id="bhMsg" class="form-message" style="display:none;margin-top:10px;"></div>
       <button type="button" id="saveBusinessHoursBtn" class="btn btn-primary" style="margin-top:14px;">保存する</button>
     `;
@@ -1906,9 +2256,11 @@ const UI = {
           newHours[d.key] = { open, close };
         }
       });
-      const windowDays = Number(document.getElementById('bookingWindowDays').value) || 60;
+      const windowDays   = Number(document.getElementById('bookingWindowDays').value) || 60;
+      const intervalDays = Number(document.getElementById('visitIntervalDays').value) || 28;
       Master.saveBusinessHours(newHours);
       Master.saveBookingWindowDays(windowDays);
+      Master.saveVisitIntervalDays(intervalDays);
       this._saveMasterToGas();
       this._showMsg('bhMsg', '✅ 営業時間設定を保存しました', 'success');
     });
@@ -2251,7 +2603,7 @@ const UI = {
     `;
 
     const form = document.getElementById('recordForm');
-    recordTab.insertBefore(tplSection, form);
+    form.parentNode.insertBefore(tplSection, form);
 
     // テンプレート開閉
     document.getElementById('templateToggleRow').addEventListener('click', () => {
@@ -2442,6 +2794,10 @@ const UI = {
     document.getElementById('inputAmount').value      = '';
     document.getElementById('inputDescription').value = '';
     document.getElementById('inputDate').value        = this._todayStr();
+    const tagsInput = document.getElementById('inputTags');
+    if (tagsInput) tagsInput.value = '';
+    this._rebuildCategoryOptions();
+    this._updateAllocationDisplay();
   },
 
   _rebuildCategoryOptions() {
@@ -2525,13 +2881,16 @@ const UI = {
       if (this._editMode && this._editingId) {
         await Data.update({ id: this._editingId, ...payload });
         this._cancelEdit();
-        this._showMsg('formMessage', '✅ 内容を更新しました！', 'success');
+        this._showToast('✅ 内容を更新しました！', 'success');
+        this.showTab('list'); // 編集後は一覧タブへ戻る
       } else {
         const label = this.currentType === 'income' ? '売上' : '経費';
         await Data.add(payload);
         document.getElementById('inputAmount').value      = '';
         document.getElementById('inputDescription').value = '';
         document.getElementById('inputDate').value        = this._todayStr();
+        const menuSel = document.getElementById('inputMenuSelect');
+        if (menuSel) menuSel.value = '';
         if (document.getElementById('inputTags')) document.getElementById('inputTags').value = '';
         if (receiptInput) {
           receiptInput.value = '';
@@ -2583,10 +2942,9 @@ const UI = {
       this._closeModal();
       try {
         await Data.remove(id);
-        this._applyFilters();
-        if (document.getElementById('tab-dashboard').classList.contains('active')) {
-          this.renderDashboard();
-        }
+        // フィルター選択肢ごと再構築（削除済み月・タグが残らないよう）
+        this.renderList();
+        this.renderDashboard();
       } catch (e) {
         this._showToast(`❌ 削除に失敗しました: ${e.message}`);
       }
@@ -2604,9 +2962,10 @@ const UI = {
   /** 画面上部にトースト通知を表示（4秒後に自動消去） */
   _showToast(msg, type = 'error') {
     const styles = {
-      error: { bg: '#FEE2E2', color: '#DC2626', border: '#FCA5A5' },
+      error:   { bg: '#FEE2E2', color: '#DC2626', border: '#FCA5A5' },
       success: { bg: '#D1FAE5', color: '#065F46', border: '#6EE7B7' },
-      warn:  { bg: '#FEF3C7', color: '#92400E', border: '#FCD34D' },
+      warn:    { bg: '#FEF3C7', color: '#92400E', border: '#FCD34D' },
+      info:    { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
     };
     const s = styles[type] || styles.error;
     const toast = document.createElement('div');
@@ -2759,10 +3118,33 @@ const UI = {
   /* ─── フィルター ─────────────────────── */
 
   initFilters() {
+    this._bindFilterHandlers();
+    this._startFilterWatcher();
+  },
+
+  /** フィルターselect に onchange/oninput を直接代入（毎回上書きOK） */
+  _bindFilterHandlers() {
+    const apply = () => this._applyFilters();
     ['filterMonth', 'filterType', 'filterCategory', 'filterTag'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.addEventListener('change', () => this._applyFilters());
+      if (!el) return;
+      el.onchange = apply;
+      el.oninput  = apply;
     });
+  },
+
+  /**
+   * select値をポーリングして変化を検知（イベントが届かない環境の保険）。
+   * イベント方式が動けばこちらは何もしないため副作用なし。
+   */
+  _startFilterWatcher() {
+    const ids = ['filterMonth', 'filterType', 'filterCategory', 'filterTag'];
+    const snap = () => ids.map(id => document.getElementById(id)?.value ?? '').join('\n');
+    let prev = snap();
+    setInterval(() => {
+      const curr = snap();
+      if (curr !== prev) { prev = curr; this._applyFilters(); }
+    }, 100);
   },
 
   /* ─── 帳簿タブ ───────────────────────── */
@@ -2982,6 +3364,16 @@ const UI = {
     el.style.display = 'block';
   },
 
+  /** File を Base64 文字列（データ部のみ）に変換 */
+  _fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(e.target.result.split(',')[1]);
+      reader.onerror = () => reject(new Error('ファイル読み込みに失敗しました'));
+      reader.readAsDataURL(file);
+    });
+  },
+
   /* ─── オフライン検知 ────────────────────── */
 
   initOfflineDetection() {
@@ -3066,6 +3458,15 @@ const AppointmentData = {
   async loadFromGas(from, to) {
     if (!GasAPI.isConfigured()) return false;
     try {
+      // デフォルト: 30日前〜60日後（管理画面での通常利用範囲）
+      if (!from) {
+        const d = new Date(); d.setDate(d.getDate() - 30);
+        from = d.toISOString().split('T')[0];
+      }
+      if (!to) {
+        const d = new Date(); d.setDate(d.getDate() + 60);
+        to = d.toISOString().split('T')[0];
+      }
       const list = await GasAPI.getAppointments(from, to);
       // 既存キャッシュと日付範囲をマージ（単純に全上書き）
       this.saveAll(list);
@@ -3214,8 +3615,8 @@ const AppointmentUI = {
       type:      'income',
       amount:    Number(appt.price || 0),
       category:  '売上',
-      memo:      `${appt.menuName || 'メニュー'}（予約 #${appt.id.substring(0, 8)}）`,
-      paymentMethod: Master.getPaymentMethods()[0] || '現金',
+      description: `${appt.menuName || 'メニュー'}（予約 #${appt.id.substring(0, 8)}）`,
+      paymentMethod: Master.getPaymentMethods()[0]?.value || 'cash',
       tags:      [],
       appointmentId: appt.id,
       createdAt: new Date().toISOString(),
@@ -3341,11 +3742,65 @@ const CustomerData = {
 };
 
 /* =============================================
+   KarteData モジュール
+   施術カルテのローカルキャッシュ＋GAS同期
+   ============================================= */
+const KARTE_KEY = 'charm_plus_karte';
+
+const KarteData = {
+  _getAll() {
+    try { return JSON.parse(localStorage.getItem(KARTE_KEY) || '[]'); } catch { return []; }
+  },
+
+  _saveAll(list) {
+    localStorage.setItem(KARTE_KEY, JSON.stringify(list));
+  },
+
+  getByCustomer(customerId) {
+    return this._getAll()
+      .filter(r => r.customerId === customerId)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  },
+
+  async add(data) {
+    let id = 'karte_' + Date.now();
+    if (GasAPI.isConfigured()) {
+      const res = await GasAPI.addKarte(data);
+      if (res.id) id = res.id;
+    }
+    const record = { ...data, id };
+    const list = this._getAll();
+    list.push(record);
+    this._saveAll(list);
+    return record;
+  },
+
+  async remove(id) {
+    if (GasAPI.isConfigured()) await GasAPI.deleteKarte(id);
+    this._saveAll(this._getAll().filter(r => r.id !== id));
+  },
+
+  async loadFromGas(customerId) {
+    try {
+      const records = await GasAPI.getKarte(customerId);
+      // customerId分だけ更新し、他の顧客分は保持
+      const others = this._getAll().filter(r => r.customerId !== customerId);
+      this._saveAll([...others, ...records]);
+      return records;
+    } catch (e) {
+      console.warn('[KarteData] GAS load failed:', e.message);
+      return this.getByCustomer(customerId);
+    }
+  },
+};
+
+/* =============================================
    CustomerUI モジュール
    顧客タブの描画・検索・追加/編集
    ============================================= */
 const CustomerUI = {
   _editingId: null,
+  _detailId: null,
 
   init() {
     // 検索
@@ -3370,6 +3825,14 @@ const CustomerUI = {
     document.getElementById('customerForm').addEventListener('submit', e => {
       e.preventDefault();
       this._submitForm();
+    });
+
+    // 詳細モーダル閉じる
+    document.getElementById('customerDetailClose').addEventListener('click', () => {
+      this._closeDetail();
+    });
+    document.getElementById('customerDetailModal').addEventListener('click', e => {
+      if (e.target === document.getElementById('customerDetailModal')) this._closeDetail();
     });
   },
 
@@ -3420,6 +3883,7 @@ const CustomerUI = {
         <div style="text-align:right;font-size:0.72rem;color:var(--text-sub);flex-shrink:0;">
           ${c.lastVisit ? `最終来店<br><span style="color:var(--text);font-weight:600;">${this._esc(c.lastVisit)}</span>` : '<span style="color:var(--text-light);">未来店</span>'}
           <br><span style="margin-top:4px;display:inline-block;">来店 <strong>${c.visitCount || 0}</strong> 回</span>
+          ${this._nextVisitBadge(c)}
         </div>
         <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;">
           <button class="cust-edit-btn edit-btn" data-id="${this._esc(c.id)}"
@@ -3430,6 +3894,12 @@ const CustomerUI = {
                    padding:3px 10px;font-size:11px;cursor:pointer;color:#EF4444;font-family:var(--font-sans);">削除</button>
         </div>
       </div>`).join('');
+
+    container.querySelectorAll('.customer-card').forEach(card => {
+      card.addEventListener('click', () => {
+        this._openDetail(card.dataset.id);
+      });
+    });
 
     container.querySelectorAll('.cust-edit-btn').forEach(btn => {
       btn.addEventListener('click', e => {
@@ -3443,6 +3913,200 @@ const CustomerUI = {
         e.stopPropagation();
         this._confirmDelete(btn.dataset.id);
       });
+    });
+  },
+
+  /* ─── 顧客詳細 + カルテ ─────────────────── */
+
+  async _openDetail(id) {
+    const c = CustomerData.getById(id);
+    if (!c) return;
+    this._detailId = id;
+
+    const modal = document.getElementById('customerDetailModal');
+    modal.style.display = 'flex';
+
+    // ヘッダー情報をセット
+    document.getElementById('detailInitial').textContent  = (c.name || '？').charAt(0);
+    document.getElementById('detailName').textContent     = c.name || '';
+    document.getElementById('detailNameKana').textContent = c.nameKana || '';
+    document.getElementById('detailPhone').textContent    = c.phone || '－';
+    document.getElementById('detailEmail').textContent    = c.email || '－';
+    document.getElementById('detailBirthday').textContent = c.birthday || '－';
+    document.getElementById('detailVisitCount').textContent = `${c.visitCount || 0} 回`;
+    document.getElementById('detailTotalSpend').textContent = `¥${Number(c.totalSpend || 0).toLocaleString()}`;
+    document.getElementById('detailLastVisit').textContent  = c.lastVisit || '未来店';
+    document.getElementById('detailAllergy').textContent    = c.allergyNotes || '－';
+    document.getElementById('detailMemo').textContent       = c.memo || '－';
+
+    // 編集ボタン
+    document.getElementById('detailEditBtn').onclick = () => {
+      this._closeDetail();
+      this._openModal(id);
+    };
+
+    // カルテ読み込み
+    this._renderKarte(id, []);
+    const records = await KarteData.loadFromGas(id);
+    this._renderKarte(id, records);
+  },
+
+  _closeDetail() {
+    document.getElementById('customerDetailModal').style.display = 'none';
+    this._detailId = null;
+  },
+
+  _renderKarte(customerId, records) {
+    const container = document.getElementById('karteList');
+    if (!container) return;
+
+    const menus = Master.getMenus();
+    const menuOptions = menus.map(m =>
+      `<option value="${this._esc(m.name)}" data-price="${m.price}">${this._esc(m.name)}（¥${Number(m.price).toLocaleString()}）</option>`
+    ).join('');
+
+    const listHtml = records.length
+      ? records.map(r => `
+        <div class="karte-record" data-id="${this._esc(r.id)}"
+          style="padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;background:white;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:0.8rem;color:var(--text-sub);">${this._esc(r.date || '')}</div>
+              <div style="font-weight:700;font-size:0.9rem;margin:2px 0;">${this._esc(r.menuName || '')}</div>
+              ${r.price ? `<div style="font-family:var(--font-serif);color:var(--accent);font-size:0.85rem;">¥${Number(r.price).toLocaleString()}</div>` : ''}
+              ${r.staffNote ? `<div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;white-space:pre-wrap;">${this._esc(r.staffNote)}</div>` : ''}
+              ${r.photoId ? `<a href="https://drive.google.com/file/d/${this._esc(r.photoId)}/view" target="_blank" rel="noopener"
+                style="font-size:11px;color:var(--accent);text-decoration:none;margin-top:4px;display:inline-block;">📷 写真を見る</a>` : ''}
+            </div>
+            <button class="del-karte-btn" data-id="${this._esc(r.id)}"
+              style="background:none;border:1px solid #FECACA;border-radius:var(--radius-xs);
+                     padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;flex-shrink:0;">削除</button>
+          </div>
+        </div>`).join('')
+      : `<p style="color:var(--text-light);font-size:13px;text-align:center;padding:20px 0;">カルテがありません</p>`;
+
+    const today = new Date().toISOString().split('T')[0];
+    container.innerHTML = `
+      <div style="margin-bottom:14px;">${listHtml}</div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;">
+        <h4 style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text);">カルテを追加</h4>
+        <div style="display:grid;gap:8px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>
+              <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">施術日</label>
+              <input type="date" id="karteDate" value="${today}"
+                style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">メニュー</label>
+              <select id="karteMenu"
+                style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);">
+                <option value="">-- メニューを選択 --</option>
+                ${menuOptions}
+                <option value="__custom__">手入力</option>
+              </select>
+            </div>
+          </div>
+          <div id="karteCustomMenuRow" style="display:none;">
+            <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">メニュー名（手入力）</label>
+            <input type="text" id="karteCustomMenu" placeholder="例：まつエクフラット120本"
+              style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">金額（円）</label>
+            <input type="number" id="kartePrice" placeholder="例：7000" min="0" step="1"
+              style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">施術メモ</label>
+            <textarea id="karteNote" placeholder="仕上がり・使用薬剤・お客様の反応など" rows="3"
+              style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);resize:vertical;"></textarea>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">写真（任意）</label>
+            <input type="file" id="kartePhoto" accept="image/*"
+              style="font-size:12px;padding:4px;border:1px solid var(--border);border-radius:var(--radius-xs);width:100%;">
+            <div id="karteUploadStatus" style="font-size:11px;color:var(--text-sub);margin-top:4px;"></div>
+          </div>
+          <div id="karteMsg" class="form-message" style="display:none;"></div>
+          <button type="button" id="addKarteBtn" class="btn btn-primary" style="width:100%;">カルテを保存</button>
+        </div>
+      </div>
+    `;
+
+    // メニュー選択で金額自動入力
+    document.getElementById('karteMenu').addEventListener('change', e => {
+      const opt = e.target.selectedOptions[0];
+      const isCustom = e.target.value === '__custom__';
+      document.getElementById('karteCustomMenuRow').style.display = isCustom ? 'block' : 'none';
+      if (!isCustom && opt.dataset.price) {
+        document.getElementById('kartePrice').value = opt.dataset.price;
+      }
+    });
+
+    // カルテ削除
+    container.querySelectorAll('.del-karte-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('このカルテを削除しますか？')) return;
+        btn.disabled = true;
+        await KarteData.remove(btn.dataset.id);
+        const updated = KarteData.getByCustomer(customerId);
+        this._renderKarte(customerId, updated);
+        UI._showToast('🗑️ カルテを削除しました', 'info');
+      });
+    });
+
+    // カルテ追加
+    document.getElementById('addKarteBtn').addEventListener('click', async () => {
+      const date     = document.getElementById('karteDate').value;
+      const menuSel  = document.getElementById('karteMenu').value;
+      const menuName = menuSel === '__custom__'
+        ? document.getElementById('karteCustomMenu').value.trim()
+        : menuSel;
+      const price    = Number(document.getElementById('kartePrice').value) || 0;
+      const staffNote = document.getElementById('karteNote').value.trim();
+      const photoFile = document.getElementById('kartePhoto').files[0];
+
+      if (!date)     { UI._showMsg('karteMsg', '⚠️ 施術日を選んでください', 'error'); return; }
+      if (!menuName) { UI._showMsg('karteMsg', '⚠️ メニューを入力してください', 'error'); return; }
+
+      const addBtn = document.getElementById('addKarteBtn');
+      addBtn.disabled = true;
+      addBtn.textContent = '保存中...';
+
+      try {
+        let photoId = '';
+        if (photoFile) {
+          document.getElementById('karteUploadStatus').textContent = '写真をアップロード中...';
+          const base64Data = await UI._fileToBase64(photoFile);
+          const uploadRes  = await GasAPI.post({
+            action: 'uploadReceipt',
+            fileName: photoFile.name,
+            mimeType: photoFile.type,
+            base64Data,
+          });
+          photoId = uploadRes.fileId || '';
+          document.getElementById('karteUploadStatus').textContent = '';
+        }
+
+        const record = await KarteData.add({
+          customerId,
+          date,
+          menuName,
+          price,
+          staffNote,
+          photoId,
+          createdAt: new Date().toISOString().split('T')[0],
+        });
+
+        const updated = KarteData.getByCustomer(customerId);
+        this._renderKarte(customerId, updated);
+        UI._showToast('✅ カルテを保存しました', 'success');
+      } catch (e) {
+        UI._showMsg('karteMsg', '⚠️ 保存に失敗しました: ' + e.message, 'error');
+        addBtn.disabled = false;
+        addBtn.textContent = 'カルテを保存';
+      }
     });
   },
 
@@ -3536,6 +4200,37 @@ const CustomerUI = {
     });
   },
 
+  // 次回来店提案日を計算（lastVisit + visitIntervalDays）
+  _nextVisitInfo(customer) {
+    if (!customer.lastVisit) return null;
+    const interval = Master.getVisitIntervalDays();
+    const last = new Date(customer.lastVisit + 'T00:00:00');
+    const next = new Date(last);
+    next.setDate(next.getDate() + interval);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((next - today) / 86400000);
+    return { date: next.toISOString().split('T')[0], diffDays };
+  },
+
+  // 次回来店バッジHTML（顧客カード右側に表示）
+  _nextVisitBadge(customer) {
+    const info = this._nextVisitInfo(customer);
+    if (!info) return '';
+    const { date, diffDays } = info;
+    const [y, m, d] = date.split('-');
+    const label = `${Number(m)}/${Number(d)}`;
+    if (diffDays < 0) {
+      // 過ぎている
+      return `<br><span style="color:var(--rose);font-weight:700;">次回 ${label}（${Math.abs(diffDays)}日超過）</span>`;
+    } else if (diffDays <= 7) {
+      // 7日以内
+      return `<br><span style="color:var(--accent);font-weight:700;">次回 ${label}（あと${diffDays}日）</span>`;
+    } else {
+      return `<br><span style="color:var(--text-light);">次回目安 ${label}</span>`;
+    }
+  },
+
   _esc(str) {
     const el = document.createElement('div');
     el.textContent = String(str || '');
@@ -3582,13 +4277,15 @@ async function init() {
       AppointmentData.loadFromGas(),
     ]);
     if (loaded) {
-      UI.renderDashboard();
       // フォームの支払方法・科目も更新
       UI._rebuildPaymentMethodOptions();
       UI._rebuildCategoryOptions();
-      // 収支一覧が表示中なら再描画（GAS同期後に最新データを反映）
-      if (document.getElementById('tab-list')?.classList.contains('active')) {
-        UI.renderList();
+      // GAS同期後に現在のアクティブタブを再描画
+      const activeTab = document.querySelector('.nav-btn.active');
+      if (activeTab) {
+        UI.showTab(activeTab.dataset.tab);
+      } else {
+        UI.renderDashboard();
       }
     }
   }
