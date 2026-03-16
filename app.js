@@ -3116,8 +3116,10 @@ const UI = {
   /* ─── フィルター ─────────────────────── */
 
   initFilters() {
-    const applyBtn = document.getElementById('filterApplyBtn');
-    if (applyBtn) applyBtn.addEventListener('click', () => this._applyFilters());
+    ['filterMonth', 'filterType', 'filterCategory', 'filterTag'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => this._applyFilters());
+    });
   },
 
   /* ─── 帳簿タブ ───────────────────────── */
