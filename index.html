@@ -566,6 +566,75 @@
     </div>
   </div>
 
+  <!-- 顧客詳細 + カルテ モーダル -->
+  <div id="customerDetailModal" class="modal" role="dialog" aria-modal="true" style="display:none;">
+    <div class="modal-content" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto;padding:24px;">
+
+      <!-- ヘッダー -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="width:48px;height:48px;border-radius:50%;background:var(--accent-dim);
+                      display:flex;align-items:center;justify-content:center;flex-shrink:0;
+                      font-family:var(--font-serif);font-size:1.4rem;color:var(--accent);font-weight:700;"
+               id="detailInitial">？</div>
+          <div>
+            <div id="detailName" style="font-family:var(--font-serif);font-size:1.2rem;font-weight:700;color:var(--text);"></div>
+            <div id="detailNameKana" style="font-size:0.75rem;color:var(--text-sub);margin-top:2px;"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button id="detailEditBtn" class="btn btn-secondary" style="font-size:12px;padding:5px 12px;">編集</button>
+          <button id="customerDetailClose" class="btn btn-secondary" style="font-size:12px;padding:5px 12px;">閉じる</button>
+        </div>
+      </div>
+
+      <!-- 基本情報グリッド -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;font-size:13px;">
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px;">
+          <div style="font-size:11px;color:var(--text-sub);margin-bottom:3px;">電話番号</div>
+          <div id="detailPhone" style="font-weight:600;"></div>
+        </div>
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px;">
+          <div style="font-size:11px;color:var(--text-sub);margin-bottom:3px;">メールアドレス</div>
+          <div id="detailEmail" style="font-weight:600;overflow-wrap:anywhere;"></div>
+        </div>
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px;">
+          <div style="font-size:11px;color:var(--text-sub);margin-bottom:3px;">誕生日</div>
+          <div id="detailBirthday" style="font-weight:600;"></div>
+        </div>
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px;">
+          <div style="font-size:11px;color:var(--text-sub);margin-bottom:3px;">最終来店</div>
+          <div id="detailLastVisit" style="font-weight:600;"></div>
+        </div>
+        <div style="background:var(--accent-dim);border-radius:var(--radius-sm);padding:10px 12px;">
+          <div style="font-size:11px;color:var(--text-sub);margin-bottom:3px;">来店回数</div>
+          <div id="detailVisitCount" style="font-weight:700;font-family:var(--font-serif);font-size:1.1rem;color:var(--accent);"></div>
+        </div>
+        <div style="background:var(--accent-dim);border-radius:var(--radius-sm);padding:10px 12px;">
+          <div style="font-size:11px;color:var(--text-sub);margin-bottom:3px;">累計売上</div>
+          <div id="detailTotalSpend" style="font-weight:700;font-family:var(--font-serif);font-size:1.1rem;color:var(--accent);"></div>
+        </div>
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px;grid-column:span 2;">
+          <div style="font-size:11px;color:var(--text-sub);margin-bottom:3px;">アレルギー・注意事項</div>
+          <div id="detailAllergy" style="font-weight:600;"></div>
+        </div>
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px;grid-column:span 2;">
+          <div style="font-size:11px;color:var(--text-sub);margin-bottom:3px;">メモ</div>
+          <div id="detailMemo" style="font-weight:600;"></div>
+        </div>
+      </div>
+
+      <!-- カルテセクション -->
+      <div style="border-top:2px solid var(--border);padding-top:18px;">
+        <h3 style="font-family:var(--font-serif);font-size:1rem;font-weight:700;margin-bottom:14px;color:var(--text);">施術カルテ</h3>
+        <div id="karteList">
+          <p style="color:var(--text-light);font-size:13px;text-align:center;padding:20px 0;">読み込み中...</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

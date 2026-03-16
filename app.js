@@ -153,6 +153,22 @@ const GasAPI = {
     return this._post({ action: 'deleteCustomer', id });
   },
 
+  async getKarte(customerId) {
+    const res = await fetch(`${GAS_URL}?action=getKarte&customerId=${encodeURIComponent(customerId)}`, { redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    return json.records || [];
+  },
+
+  async addKarte(data) {
+    return this._post({ action: 'addKarte', data });
+  },
+
+  async deleteKarte(id) {
+    return this._post({ action: 'deleteKarte', id });
+  },
+
   async getAppointments(from, to) {
     const params = new URLSearchParams({ action: 'getAppointments' });
     if (from) params.set('from', from);
@@ -3644,11 +3660,65 @@ const CustomerData = {
 };
 
 /* =============================================
+   KarteData モジュール
+   施術カルテのローカルキャッシュ＋GAS同期
+   ============================================= */
+const KARTE_KEY = 'charm_plus_karte';
+
+const KarteData = {
+  _getAll() {
+    try { return JSON.parse(localStorage.getItem(KARTE_KEY) || '[]'); } catch { return []; }
+  },
+
+  _saveAll(list) {
+    localStorage.setItem(KARTE_KEY, JSON.stringify(list));
+  },
+
+  getByCustomer(customerId) {
+    return this._getAll()
+      .filter(r => r.customerId === customerId)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  },
+
+  async add(data) {
+    let id = 'karte_' + Date.now();
+    if (GasAPI.isConfigured()) {
+      const res = await GasAPI.addKarte(data);
+      if (res.id) id = res.id;
+    }
+    const record = { ...data, id };
+    const list = this._getAll();
+    list.push(record);
+    this._saveAll(list);
+    return record;
+  },
+
+  async remove(id) {
+    if (GasAPI.isConfigured()) await GasAPI.deleteKarte(id);
+    this._saveAll(this._getAll().filter(r => r.id !== id));
+  },
+
+  async loadFromGas(customerId) {
+    try {
+      const records = await GasAPI.getKarte(customerId);
+      // customerId分だけ更新し、他の顧客分は保持
+      const others = this._getAll().filter(r => r.customerId !== customerId);
+      this._saveAll([...others, ...records]);
+      return records;
+    } catch (e) {
+      console.warn('[KarteData] GAS load failed:', e.message);
+      return this.getByCustomer(customerId);
+    }
+  },
+};
+
+/* =============================================
    CustomerUI モジュール
    顧客タブの描画・検索・追加/編集
    ============================================= */
 const CustomerUI = {
   _editingId: null,
+  _detailId: null,
 
   init() {
     // 検索
@@ -3673,6 +3743,14 @@ const CustomerUI = {
     document.getElementById('customerForm').addEventListener('submit', e => {
       e.preventDefault();
       this._submitForm();
+    });
+
+    // 詳細モーダル閉じる
+    document.getElementById('customerDetailClose').addEventListener('click', () => {
+      this._closeDetail();
+    });
+    document.getElementById('customerDetailModal').addEventListener('click', e => {
+      if (e.target === document.getElementById('customerDetailModal')) this._closeDetail();
     });
   },
 
@@ -3735,6 +3813,12 @@ const CustomerUI = {
         </div>
       </div>`).join('');
 
+    container.querySelectorAll('.customer-card').forEach(card => {
+      card.addEventListener('click', () => {
+        this._openDetail(card.dataset.id);
+      });
+    });
+
     container.querySelectorAll('.cust-edit-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
@@ -3747,6 +3831,200 @@ const CustomerUI = {
         e.stopPropagation();
         this._confirmDelete(btn.dataset.id);
       });
+    });
+  },
+
+  /* ─── 顧客詳細 + カルテ ─────────────────── */
+
+  async _openDetail(id) {
+    const c = CustomerData.getById(id);
+    if (!c) return;
+    this._detailId = id;
+
+    const modal = document.getElementById('customerDetailModal');
+    modal.style.display = 'flex';
+
+    // ヘッダー情報をセット
+    document.getElementById('detailInitial').textContent  = (c.name || '？').charAt(0);
+    document.getElementById('detailName').textContent     = c.name || '';
+    document.getElementById('detailNameKana').textContent = c.nameKana || '';
+    document.getElementById('detailPhone').textContent    = c.phone || '－';
+    document.getElementById('detailEmail').textContent    = c.email || '－';
+    document.getElementById('detailBirthday').textContent = c.birthday || '－';
+    document.getElementById('detailVisitCount').textContent = `${c.visitCount || 0} 回`;
+    document.getElementById('detailTotalSpend').textContent = `¥${Number(c.totalSpend || 0).toLocaleString()}`;
+    document.getElementById('detailLastVisit').textContent  = c.lastVisit || '未来店';
+    document.getElementById('detailAllergy').textContent    = c.allergyNotes || '－';
+    document.getElementById('detailMemo').textContent       = c.memo || '－';
+
+    // 編集ボタン
+    document.getElementById('detailEditBtn').onclick = () => {
+      this._closeDetail();
+      this._openModal(id);
+    };
+
+    // カルテ読み込み
+    this._renderKarte(id, []);
+    const records = await KarteData.loadFromGas(id);
+    this._renderKarte(id, records);
+  },
+
+  _closeDetail() {
+    document.getElementById('customerDetailModal').style.display = 'none';
+    this._detailId = null;
+  },
+
+  _renderKarte(customerId, records) {
+    const container = document.getElementById('karteList');
+    if (!container) return;
+
+    const menus = Master.getMenus();
+    const menuOptions = menus.map(m =>
+      `<option value="${this._esc(m.name)}" data-price="${m.price}">${this._esc(m.name)}（¥${Number(m.price).toLocaleString()}）</option>`
+    ).join('');
+
+    const listHtml = records.length
+      ? records.map(r => `
+        <div class="karte-record" data-id="${this._esc(r.id)}"
+          style="padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;background:white;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:0.8rem;color:var(--text-sub);">${this._esc(r.date || '')}</div>
+              <div style="font-weight:700;font-size:0.9rem;margin:2px 0;">${this._esc(r.menuName || '')}</div>
+              ${r.price ? `<div style="font-family:var(--font-serif);color:var(--accent);font-size:0.85rem;">¥${Number(r.price).toLocaleString()}</div>` : ''}
+              ${r.staffNote ? `<div style="font-size:0.78rem;color:var(--text-sub);margin-top:4px;white-space:pre-wrap;">${this._esc(r.staffNote)}</div>` : ''}
+              ${r.photoId ? `<a href="https://drive.google.com/file/d/${this._esc(r.photoId)}/view" target="_blank" rel="noopener"
+                style="font-size:11px;color:var(--accent);text-decoration:none;margin-top:4px;display:inline-block;">📷 写真を見る</a>` : ''}
+            </div>
+            <button class="del-karte-btn" data-id="${this._esc(r.id)}"
+              style="background:none;border:1px solid #FECACA;border-radius:var(--radius-xs);
+                     padding:2px 8px;font-size:11px;cursor:pointer;color:#EF4444;flex-shrink:0;">削除</button>
+          </div>
+        </div>`).join('')
+      : `<p style="color:var(--text-light);font-size:13px;text-align:center;padding:20px 0;">カルテがありません</p>`;
+
+    const today = new Date().toISOString().split('T')[0];
+    container.innerHTML = `
+      <div style="margin-bottom:14px;">${listHtml}</div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;">
+        <h4 style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text);">カルテを追加</h4>
+        <div style="display:grid;gap:8px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>
+              <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">施術日</label>
+              <input type="date" id="karteDate" value="${today}"
+                style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">メニュー</label>
+              <select id="karteMenu"
+                style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);">
+                <option value="">-- メニューを選択 --</option>
+                ${menuOptions}
+                <option value="__custom__">手入力</option>
+              </select>
+            </div>
+          </div>
+          <div id="karteCustomMenuRow" style="display:none;">
+            <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">メニュー名（手入力）</label>
+            <input type="text" id="karteCustomMenu" placeholder="例：まつエクフラット120本"
+              style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">金額（円）</label>
+            <input type="number" id="kartePrice" placeholder="例：7000" min="0" step="1"
+              style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">施術メモ</label>
+            <textarea id="karteNote" placeholder="仕上がり・使用薬剤・お客様の反応など" rows="3"
+              style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font-sans);resize:vertical;"></textarea>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:3px;">写真（任意）</label>
+            <input type="file" id="kartePhoto" accept="image/*"
+              style="font-size:12px;padding:4px;border:1px solid var(--border);border-radius:var(--radius-xs);width:100%;">
+            <div id="karteUploadStatus" style="font-size:11px;color:var(--text-sub);margin-top:4px;"></div>
+          </div>
+          <div id="karteMsg" class="form-message" style="display:none;"></div>
+          <button type="button" id="addKarteBtn" class="btn btn-primary" style="width:100%;">カルテを保存</button>
+        </div>
+      </div>
+    `;
+
+    // メニュー選択で金額自動入力
+    document.getElementById('karteMenu').addEventListener('change', e => {
+      const opt = e.target.selectedOptions[0];
+      const isCustom = e.target.value === '__custom__';
+      document.getElementById('karteCustomMenuRow').style.display = isCustom ? 'block' : 'none';
+      if (!isCustom && opt.dataset.price) {
+        document.getElementById('kartePrice').value = opt.dataset.price;
+      }
+    });
+
+    // カルテ削除
+    container.querySelectorAll('.del-karte-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('このカルテを削除しますか？')) return;
+        btn.disabled = true;
+        await KarteData.remove(btn.dataset.id);
+        const updated = KarteData.getByCustomer(customerId);
+        this._renderKarte(customerId, updated);
+        UI._showToast('🗑️ カルテを削除しました', 'info');
+      });
+    });
+
+    // カルテ追加
+    document.getElementById('addKarteBtn').addEventListener('click', async () => {
+      const date     = document.getElementById('karteDate').value;
+      const menuSel  = document.getElementById('karteMenu').value;
+      const menuName = menuSel === '__custom__'
+        ? document.getElementById('karteCustomMenu').value.trim()
+        : menuSel;
+      const price    = Number(document.getElementById('kartePrice').value) || 0;
+      const staffNote = document.getElementById('karteNote').value.trim();
+      const photoFile = document.getElementById('kartePhoto').files[0];
+
+      if (!date)     { UI._showMsg('karteMsg', '⚠️ 施術日を選んでください', 'error'); return; }
+      if (!menuName) { UI._showMsg('karteMsg', '⚠️ メニューを入力してください', 'error'); return; }
+
+      const addBtn = document.getElementById('addKarteBtn');
+      addBtn.disabled = true;
+      addBtn.textContent = '保存中...';
+
+      try {
+        let photoId = '';
+        if (photoFile) {
+          document.getElementById('karteUploadStatus').textContent = '写真をアップロード中...';
+          const base64Data = await UI._fileToBase64(photoFile);
+          const uploadRes  = await GasAPI.post({
+            action: 'uploadReceipt',
+            fileName: photoFile.name,
+            mimeType: photoFile.type,
+            base64Data,
+          });
+          photoId = uploadRes.fileId || '';
+          document.getElementById('karteUploadStatus').textContent = '';
+        }
+
+        const record = await KarteData.add({
+          customerId,
+          date,
+          menuName,
+          price,
+          staffNote,
+          photoId,
+          createdAt: new Date().toISOString().split('T')[0],
+        });
+
+        const updated = KarteData.getByCustomer(customerId);
+        this._renderKarte(customerId, updated);
+        UI._showToast('✅ カルテを保存しました', 'success');
+      } catch (e) {
+        UI._showMsg('karteMsg', '⚠️ 保存に失敗しました: ' + e.message, 'error');
+        addBtn.disabled = false;
+        addBtn.textContent = 'カルテを保存';
+      }
     });
   },
 

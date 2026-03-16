@@ -20,6 +20,7 @@ const SHEET_SETTINGS     = '設定';
 const SHEET_MASTER       = 'マスタ';
 const SHEET_CUSTOMERS    = '顧客';
 const SHEET_APPOINTMENTS = '予約';
+const SHEET_KARTE        = 'カルテ';
 
 // ─────────────────────────────────────────
 //  エントリポイント
@@ -35,6 +36,7 @@ function doGet(e) {
     else if (action === 'getBookingInfo')    result = getBookingInfo();
     else if (action === 'getAvailableSlots') result = getAvailableSlots(e.parameter.menuId, e.parameter.date);
     else if (action === 'getAppointments')   result = getAppointments(e.parameter.from, e.parameter.to);
+    else if (action === 'getKarte')          result = getKarte(e.parameter.customerId);
     else if (action === 'getBackupStatus')   result = getBackupStatus();
     else result = { error: '不明なアクション: ' + action };
     return jsonResponse(result);
@@ -61,6 +63,8 @@ function doPost(e) {
     else if (action === 'createAppointment')      result = createAppointment(body.data);
     else if (action === 'updateAppointmentStatus') result = updateAppointmentStatus(body.id, body.status, body.staffNote);
     else if (action === 'cancelAppointment')      result = cancelAppointment(body.id);
+    else if (action === 'addKarte')               result = addKarte(body.data);
+    else if (action === 'deleteKarte')            result = deleteKarte(body.id);
     else if (action === 'setupProtection')        result = setupSheetProtection();
     else if (action === 'createBackup')           result = createManualBackup();
     else if (action === 'saveBackupSettings')     result = saveBackupSettings(body.data);
@@ -109,6 +113,10 @@ function getOrCreateSheet(name) {
         'id','createdAt','customerName','phone','email',
         'menuId','menuName','price','dateTime','duration',
         'status','notes','staffNote','reminderSent','customerId','transactionId'
+      ]);
+    } else if (name === SHEET_KARTE) {
+      sheet.appendRow([
+        'id','customerId','date','menuName','price','staffNote','photoId','createdAt'
       ]);
     }
   }
@@ -896,6 +904,73 @@ function removeBackupTrigger() {
   saveMaster({ backupConfig: config });
 
   return { success: true, message: 'バックアップトリガーを解除しました' };
+}
+
+// ─────────────────────────────────────────
+//  カルテ管理
+// ─────────────────────────────────────────
+
+/** カルテ一覧取得（顧客ID指定） */
+function getKarte(customerId) {
+  const sheet = getOrCreateSheet(SHEET_KARTE);
+  const data  = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { records: [] };
+
+  const headers = data[0].map(String);
+  const result  = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const r   = {};
+    headers.forEach((h, j) => {
+      if (h === 'price') {
+        r[h] = Number(row[j]) || 0;
+      } else if (h === 'date' || h === 'createdAt') {
+        r[h] = row[j] instanceof Date ? formatCellDate(row[j]) : String(row[j] ?? '');
+      } else {
+        r[h] = row[j] === undefined || row[j] === null ? '' : String(row[j]);
+      }
+    });
+    if (!r.id) continue;
+    if (customerId && r.customerId !== customerId) continue;
+    result.push(r);
+  }
+  // 日付降順
+  result.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  return { records: result };
+}
+
+/** カルテ追加 */
+function addKarte(data) {
+  const sheet = getOrCreateSheet(SHEET_KARTE);
+  const id    = 'karte_' + new Date().getTime();
+  sheet.appendRow([
+    id,
+    data.customerId  || '',
+    data.date        || '',
+    data.menuName    || '',
+    Number(data.price) || 0,
+    data.staffNote   || '',
+    data.photoId     || '',
+    new Date().toISOString(),
+  ]);
+  return { success: true, id };
+}
+
+/** カルテ削除 */
+function deleteKarte(id) {
+  const sheet   = getOrCreateSheet(SHEET_KARTE);
+  const rows    = sheet.getDataRange().getValues();
+  const headers = rows[0].map(String);
+  const idIdx   = headers.indexOf('id');
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][idIdx]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  return { error: 'カルテが見つかりません: ' + id };
 }
 
 // ─────────────────────────────────────────
