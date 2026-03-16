@@ -3499,6 +3499,8 @@ const AppointmentData = {
    予約タブ（日次ビュー・ステータス管理）
    ============================================= */
 const AppointmentUI = {
+  _view: 'day', // 'day' | 'upcoming'
+
   init() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('apptDate').value = today;
@@ -3523,9 +3525,28 @@ const AppointmentUI = {
     });
 
     document.getElementById('apptDate').addEventListener('change', () => this.renderAppointments());
+
+    // ビュー切替
+    document.getElementById('apptViewDay').addEventListener('click', () => {
+      this._view = 'day';
+      document.getElementById('apptViewDay').className      = 'btn btn-primary';
+      document.getElementById('apptViewUpcoming').className = 'btn btn-secondary';
+      document.getElementById('apptDayNav').style.display   = 'flex';
+      this.renderAppointments();
+    });
+
+    document.getElementById('apptViewUpcoming').addEventListener('click', () => {
+      this._view = 'upcoming';
+      document.getElementById('apptViewDay').className      = 'btn btn-secondary';
+      document.getElementById('apptViewUpcoming').className = 'btn btn-primary';
+      document.getElementById('apptDayNav').style.display   = 'none';
+      this.renderAppointments();
+    });
   },
 
   async renderAppointments() {
+    if (this._view === 'upcoming') { this._renderUpcoming(); return; }
+
     const dateStr = document.getElementById('apptDate').value;
     const el      = document.getElementById('appointmentList');
     if (!el) return;
@@ -3605,6 +3626,102 @@ const AppointmentUI = {
     // ステータス変更ボタン
     el.querySelectorAll('.appt-action-btn').forEach(btn => {
       btn.addEventListener('click', () => this._handleAction(btn.dataset.id, btn.dataset.action));
+    });
+  },
+
+  /* ─── 今後の予約リスト ──────────────────────── */
+
+  async _renderUpcoming() {
+    const el = document.getElementById('appointmentList');
+    if (!el) return;
+
+    el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-sub);font-size:13px;">読み込み中...</div>`;
+
+    const today = new Date().toISOString().split('T')[0];
+    const toDate = new Date(); toDate.setDate(toDate.getDate() + 60);
+    const toStr  = toDate.toISOString().split('T')[0];
+
+    if (GasAPI.isConfigured() && navigator.onLine) {
+      await AppointmentData.loadFromGas(today, toStr);
+    }
+
+    const weekDays = ['日','月','火','水','木','金','土'];
+    const statusBadge = { pending: '🟡 未確認', confirmed: '🟢 確定', completed: '✅ 完了', cancelled: '❌ キャンセル', noshow: '🔴 NC' };
+    const statusColor = { pending: '#FEF3C7', confirmed: '#EAF3EC', completed: '#F0F0F0', cancelled: '#F5F5F5', noshow: '#F5EDED' };
+
+    // 今日以降・pending/confirmed のみ、日付順
+    const appts = AppointmentData.getAll()
+      .filter(a => (a.dateTime || '') >= today && (a.status === 'pending' || a.status === 'confirmed'))
+      .sort((a, b) => (a.dateTime || '').localeCompare(b.dateTime || ''));
+
+    if (!appts.length) {
+      el.innerHTML = `<p style="text-align:center;color:var(--text-light);font-size:14px;padding:40px 0;">今後の予約はありません</p>`;
+      return;
+    }
+
+    // 日付でグループ化
+    const groups = {};
+    appts.forEach(a => {
+      const date = (a.dateTime || '').substring(0, 10);
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(a);
+    });
+
+    const html = Object.entries(groups).map(([date, list]) => {
+      const [y, m, d] = date.split('-');
+      const dow   = weekDays[new Date(date + 'T00:00:00').getDay()];
+      const label = `${Number(m)}月${Number(d)}日（${dow}）`;
+      const isToday = date === today;
+
+      const cards = list.map(a => {
+        const time  = (a.dateTime || '').substring(11, 16);
+        const badge = statusBadge[a.status] || a.status;
+        const bg    = statusColor[a.status] || '#F9F9F8';
+
+        const actions = [];
+        if (a.status === 'pending') {
+          actions.push(`<button class="appt-action-btn" data-id="${UI._esc(a.id)}" data-action="confirm"
+            style="background:var(--income);color:white;border:none;border-radius:var(--radius-xs);padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--font-sans);font-weight:700;">確定</button>`);
+          actions.push(`<button class="appt-action-btn" data-id="${UI._esc(a.id)}" data-action="cancel"
+            style="background:none;border:1px solid #FECACA;border-radius:var(--radius-xs);padding:4px 10px;font-size:11px;cursor:pointer;color:#EF4444;font-family:var(--font-sans);">取消</button>`);
+        } else if (a.status === 'confirmed') {
+          actions.push(`<button class="appt-action-btn" data-id="${UI._esc(a.id)}" data-action="cancel"
+            style="background:none;border:1px solid var(--border-normal);border-radius:var(--radius-xs);padding:4px 10px;font-size:11px;cursor:pointer;color:var(--text-sub);font-family:var(--font-sans);">取消</button>`);
+        }
+
+        return `
+          <div style="background:white;border:1px solid var(--border);border-radius:var(--radius-xs);
+            padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="font-family:var(--font-serif);font-size:1.1rem;font-weight:700;color:var(--text);min-width:44px;">${time || '--:--'}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;font-size:13px;">${UI._esc(a.customerName || '')}</div>
+              <div style="font-size:12px;color:var(--text-sub);">${UI._esc(a.menuName || '')} ／ ¥${Number(a.price).toLocaleString()}</div>
+              ${a.phone ? `<div style="font-size:11px;color:var(--text-light);">${UI._esc(a.phone)}</div>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+              <span style="background:${bg};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">${badge}</span>
+              ${actions.join('')}
+            </div>
+          </div>`;
+      }).join('');
+
+      return `
+        <div style="margin-bottom:16px;">
+          <div style="font-size:13px;font-weight:700;color:${isToday ? 'var(--accent)' : 'var(--text)'};
+            padding:6px 0;border-bottom:2px solid ${isToday ? 'var(--accent)' : 'var(--border)'};margin-bottom:8px;">
+            ${isToday ? '◉ 今日 ' : ''}${label}
+            <span style="font-size:11px;font-weight:400;color:var(--text-sub);margin-left:6px;">${list.length}件</span>
+          </div>
+          ${cards}
+        </div>`;
+    }).join('');
+
+    el.innerHTML = html;
+
+    el.querySelectorAll('.appt-action-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._handleAction(btn.dataset.id, btn.dataset.action);
+      });
     });
   },
 

@@ -589,6 +589,47 @@ function getAppointments(from, to) {
 }
 
 /** 予約作成（重複チェック付き） */
+/**
+ * 電話番号で顧客を検索し、見つかれば customerId を返す。
+ * 見つからなければ新規顧客を作成して customerId を返す。
+ */
+function findOrCreateCustomerByPhone(name, phone, email) {
+  if (!phone) return '';
+  const sheet   = getOrCreateSheet(SHEET_CUSTOMERS);
+  const rows    = sheet.getDataRange().getValues();
+  const headers = rows[0].map(String);
+  const idIdx   = headers.indexOf('id');
+  const phoneIdx = headers.indexOf('phone');
+
+  // 既存顧客を電話番号で検索
+  const normalizedPhone = String(phone).replace(/[\s\-ー－]/g, '');
+  for (let i = 1; i < rows.length; i++) {
+    const rowPhone = String(rows[i][phoneIdx] || '').replace(/[\s\-ー－]/g, '');
+    if (rowPhone && rowPhone === normalizedPhone) {
+      return String(rows[i][idIdx]);
+    }
+  }
+
+  // 見つからなければ新規顧客を作成
+  const newId = 'cust_' + new Date().getTime();
+  sheet.appendRow([
+    newId,
+    new Date().toISOString(),
+    name  || '',
+    '',   // nameKana
+    phone || '',
+    email || '',
+    '',   // birthday
+    '',   // allergyNotes
+    '',   // memo
+    '',   // lastVisit
+    0,    // visitCount
+    0,    // totalSpend
+    '',   // tags
+  ]);
+  return newId;
+}
+
 function createAppointment(data) {
   // 空き確認（再チェック）
   const slotsResult = getAvailableSlots(data.menuId, data.dateTime?.substring(0, 10));
@@ -596,6 +637,9 @@ function createAppointment(data) {
   if (!slotsResult.slots.includes(requestedTime)) {
     return { error: 'ご希望の時間は既に埋まっています。別の時間をお選びください。' };
   }
+
+  // 顧客自動紐づけ（電話番号で照合 → なければ新規作成）
+  const customerId = data.customerId || findOrCreateCustomerByPhone(data.customerName, data.phone, data.email);
 
   const sheet = getOrCreateSheet(SHEET_APPOINTMENTS);
   const id    = 'appt_' + new Date().getTime();
@@ -615,7 +659,7 @@ function createAppointment(data) {
     data.notes         || '',
     '',  // staffNote
     false,
-    data.customerId    || '',
+    customerId,
     '',  // transactionId
   ]);
 

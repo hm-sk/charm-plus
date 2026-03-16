@@ -409,8 +409,14 @@
     ══════════════════════════════════════ -->
     <section id="tab-appointments" class="tab-content" aria-label="予約管理">
 
-      <!-- 日付ナビ -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <!-- ビュー切替 -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <button id="apptViewDay" class="btn btn-primary" style="flex:1;font-size:13px;padding:8px;">日別</button>
+        <button id="apptViewUpcoming" class="btn btn-secondary" style="flex:1;font-size:13px;padding:8px;">今後の予約</button>
+      </div>
+
+      <!-- 日付ナビ（日別ビュー時のみ表示） -->
+      <div id="apptDayNav" style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
         <button id="apptPrevDay" class="btn btn-secondary" style="padding:8px 14px;">◀</button>
         <input type="date" id="apptDate"
           style="flex:1;padding:9px 12px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);font-size:0.875rem;font-family:var(--font-sans);background:white;text-align:center;">
