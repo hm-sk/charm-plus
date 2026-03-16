@@ -971,13 +971,15 @@ const UI = {
   },
 
   _rebuildFilterOptions() {
-    const months = new Set();
-    const tags   = new Set();
+    const months     = new Set();
+    const tags       = new Set();
+    const usedCats   = new Set();
     Data.getAll().forEach(t => {
       // 文字列から直接 YYYY-MM を取り出す（タイムゾーン問題を回避）
       if (t.date && t.date.length >= 7) {
         months.add(t.date.substring(0, 7));
       }
+      if (t.category) usedCats.add(t.category);
       if (Array.isArray(t.tags)) t.tags.forEach(tag => tag && tags.add(tag));
     });
 
@@ -993,11 +995,11 @@ const UI = {
     });
     monthSel.value = prevMonth;
 
-    const cats = Master.getCategories();
+    // 費目フィルター：実際に取引で使われている科目のみ表示
     const catSel = document.getElementById('filterCategory');
     const prevCat = catSel.value;
     catSel.innerHTML = '<option value="">科目すべて</option>';
-    [...cats.income, ...cats.expense].forEach(cat => {
+    [...usedCats].sort().forEach(cat => {
       const opt = document.createElement('option');
       opt.value = cat;
       opt.textContent = cat;
@@ -1034,6 +1036,14 @@ const UI = {
     if (category) list = list.filter(t => t.category === category);
     if (tag)      list = list.filter(t => Array.isArray(t.tags) && t.tags.includes(tag));
 
+    // 日付降順（新しい順）にソート
+    list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    // フィルター状態バーを更新
+    const total      = Data.getAll().length;
+    const isFiltered = !!(month || type || category || tag);
+    this._updateFilterStatus(isFiltered, list.length, total);
+
     const listEl  = document.getElementById('transactionList');
     const emptyEl = document.getElementById('listEmpty');
     listEl.innerHTML = '';
@@ -1044,6 +1054,38 @@ const UI = {
       emptyEl.style.display = 'none';
       list.forEach(t => listEl.appendChild(this._buildItem(t, true)));
     }
+  },
+
+  /** フィルター状態バーの表示・非表示を切り替え */
+  _updateFilterStatus(isFiltered, count, total) {
+    let bar = document.getElementById('filterStatusBar');
+    if (!isFiltered) {
+      if (bar) bar.style.display = 'none';
+      return;
+    }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'filterStatusBar';
+      bar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;' +
+        'background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:8px 14px;' +
+        'margin-bottom:12px;font-size:13px;color:#1D4ED8;';
+      const filterBar = document.querySelector('.filter-bar');
+      if (filterBar) filterBar.parentNode.insertBefore(bar, filterBar.nextSibling);
+    }
+    bar.style.display = 'flex';
+    bar.innerHTML = `
+      <span>絞り込み中：${count} 件 / 全 ${total} 件</span>
+      <button id="filterResetBtn" style="background:none;border:1px solid #93C5FD;border-radius:6px;
+        padding:3px 10px;font-size:12px;color:#1D4ED8;cursor:pointer;">リセット</button>
+    `;
+    bar.querySelector('#filterResetBtn').addEventListener('click', () => {
+      document.getElementById('filterMonth').value    = '';
+      document.getElementById('filterType').value     = '';
+      document.getElementById('filterCategory').value = '';
+      const tagSel = document.getElementById('filterTag');
+      if (tagSel) tagSel.value = '';
+      this._applyFilters();
+    });
   },
 
   /* ─── 取引アイテム DOM 生成 ──────────── */
@@ -4210,13 +4252,15 @@ async function init() {
       AppointmentData.loadFromGas(),
     ]);
     if (loaded) {
-      UI.renderDashboard();
       // フォームの支払方法・科目も更新
       UI._rebuildPaymentMethodOptions();
       UI._rebuildCategoryOptions();
-      // 収支一覧が表示中なら再描画（GAS同期後に最新データを反映）
-      if (document.getElementById('tab-list')?.classList.contains('active')) {
-        UI.renderList();
+      // GAS同期後に現在のアクティブタブを再描画
+      const activeTab = document.querySelector('.nav-btn.active');
+      if (activeTab) {
+        UI.showTab(activeTab.dataset.tab);
+      } else {
+        UI.renderDashboard();
       }
     }
   }
