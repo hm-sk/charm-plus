@@ -30,7 +30,7 @@ const MASTER_KEY       = 'salon_kaikei_v1_master';
 const CUSTOMERS_KEY     = 'charm_plus_customers';
 const APPOINTMENTS_KEY  = 'charm_plus_appointments';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwPJ4vodIXXLiozy8HnytXyrSh6PpuqvKCUGpFS-I_Jm-e2HdWVtl_UuukUOeFtCwif/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwC5E0baLlnde7ld3A6fF05bujuOb4C0NJMFNLJNOc96Q3lp1ilmNPcueD7tYvklBGn/exec';
 
 /** 勘定科目マスター（青色申告決算書準拠） */
 const CATEGORIES = {
