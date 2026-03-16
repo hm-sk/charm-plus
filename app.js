@@ -83,6 +83,20 @@ const GasAPI = {
     return json;
   },
 
+  /** 汎用GETリクエスト */
+  async get(action) {
+    const res = await fetch(`${GAS_URL}?action=${encodeURIComponent(action)}`, { redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    return json;
+  },
+
+  /** 汎用POSTリクエスト */
+  async post(body) {
+    return this._post(body);
+  },
+
   async fetchAll() {
     const res = await fetch(`${GAS_URL}?action=getAll`, { redirect: 'follow' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1309,6 +1323,7 @@ const UI = {
     this._injectCategorySection();
     this._injectPaymentMethodSection();
     this._injectTagSection();
+    this._injectBackupSection();
   },
 
   /* ─── 家事按分設定 ──────────────────── */
@@ -1786,6 +1801,210 @@ const UI = {
       this._showMsg('tagMsg', `✅「${val}」を追加しました`, 'success');
       this._saveMasterToGas();
     });
+  },
+
+  /* ─── データ保護・バックアップ管理 ───── */
+
+  _injectBackupSection() {
+    if (!GasAPI.isConfigured()) return; // GAS未設定時はスキップ
+
+    if (document.getElementById('backupSection')) {
+      this._renderBackupSection();
+      return;
+    }
+    const danger = document.querySelector('.danger-zone');
+    const section = document.createElement('div');
+    section.id        = 'backupSection';
+    section.className = 'card form-card';
+    section.style.cssText = 'margin-top:16px;';
+    danger.parentNode.insertBefore(section, danger);
+    this._renderBackupSection();
+  },
+
+  async _renderBackupSection() {
+    const section = document.getElementById('backupSection');
+    if (!section) return;
+
+    section.innerHTML = `
+      <h2 class="section-title">データ保護・バックアップ</h2>
+      <p style="font-size:13px;color:#6B7280;margin-bottom:16px;line-height:1.6">
+        スプレッドシートの直接編集ロックと、Driveへの自動バックアップを管理します。
+      </p>
+      <div id="backupStatusArea" style="margin-bottom:16px;">
+        <div style="text-align:center;padding:16px;color:#6B7280;font-size:13px;">読み込み中...</div>
+      </div>
+    `;
+
+    // ステータスを取得
+    try {
+      const status = await GasAPI.get('getBackupStatus');
+      this._renderBackupControls(status);
+    } catch (e) {
+      document.getElementById('backupStatusArea').innerHTML =
+        '<div style="color:#EF4444;font-size:13px;">⚠️ ステータスの取得に失敗しました: ' + this._esc(e.message) + '</div>';
+    }
+  },
+
+  _renderBackupControls(status) {
+    const area = document.getElementById('backupStatusArea');
+    if (!area) return;
+
+    const bp = status.backup || {};
+    const pt = status.protection || {};
+    const allProtected = Object.values(pt).every(v => v === true);
+    const protectedCount = Object.values(pt).filter(v => v === true).length;
+    const totalSheets = Object.keys(pt).length;
+
+    const lastBackup = bp.lastBackup
+      ? new Date(bp.lastBackup).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+      : 'なし';
+
+    area.innerHTML = `
+      <!-- シート保護 -->
+      <div style="border:1px solid #E5E7EB;border-radius:8px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-weight:600;font-size:14px;">シート保護</div>
+          <span style="font-size:12px;padding:2px 8px;border-radius:4px;
+            background:${allProtected ? '#DEF7EC' : '#FEF3C7'};
+            color:${allProtected ? '#03543F' : '#92400E'};">
+            ${allProtected ? '有効' : protectedCount + '/' + totalSheets + ' 保護中'}
+          </span>
+        </div>
+        <p style="font-size:12px;color:#6B7280;margin-bottom:10px;">
+          スプレッドシート上での直接編集を防止します。アプリ経由の操作のみ許可されます。
+        </p>
+        <button type="button" id="setupProtectionBtn" class="btn btn-secondary" style="width:100%;font-size:13px;">
+          ${allProtected ? '保護を再適用する' : '全シートに保護を適用する'}
+        </button>
+      </div>
+
+      <!-- バックアップ設定 -->
+      <div style="border:1px solid #E5E7EB;border-radius:8px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-weight:600;font-size:14px;">自動バックアップ</div>
+          <span style="font-size:12px;padding:2px 8px;border-radius:4px;
+            background:${bp.triggerActive ? '#DEF7EC' : '#FEE2E2'};
+            color:${bp.triggerActive ? '#03543F' : '#991B1B'};">
+            ${bp.triggerActive ? '有効（毎日3:00）' : '無効'}
+          </span>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:#6B7280;display:block;margin-bottom:4px;">バックアップ先フォルダ</label>
+          <input type="text" id="backupFolderPath" value="${this._esc(bp.folderPath || 'charm+ バックアップ')}"
+            placeholder="charm+ バックアップ"
+            style="width:100%;border:1px solid #E5E7EB;border-radius:6px;padding:6px 10px;font-size:13px;box-sizing:border-box;">
+          <p style="font-size:11px;color:#9CA3AF;margin-top:4px;">
+            Google Driveのルートからのパス（例: サロン/バックアップ）
+          </p>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:#6B7280;display:block;margin-bottom:4px;">保持世代数</label>
+          <input type="number" id="backupMaxKeep" value="${bp.maxKeep || 30}" min="1" max="365"
+            style="width:80px;border:1px solid #E5E7EB;border-radius:6px;padding:6px 10px;font-size:13px;">
+          <span style="font-size:12px;color:#6B7280;margin-left:4px;">件（古いバックアップは自動削除）</span>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button type="button" id="toggleBackupTriggerBtn" class="btn ${bp.triggerActive ? 'btn-danger' : 'btn-primary'}" style="flex:1;font-size:13px;">
+            ${bp.triggerActive ? '自動バックアップを停止' : '自動バックアップを開始'}
+          </button>
+          <button type="button" id="saveBackupSettingsBtn" class="btn btn-secondary" style="font-size:13px;">
+            設定保存
+          </button>
+        </div>
+
+        <!-- ステータス表示 -->
+        <div style="background:#F9FAFB;border-radius:6px;padding:10px;font-size:12px;color:#6B7280;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span>最終バックアップ:</span>
+            <span style="font-weight:500;color:#374151;">${lastBackup}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span>バックアップ数:</span>
+            <span style="font-weight:500;color:#374151;">${bp.backupCount || 0} 件</span>
+          </div>
+          ${bp.folderUrl ? `<div style="margin-top:6px;"><a href="${bp.folderUrl}" target="_blank" rel="noopener" style="color:var(--gold);font-size:12px;text-decoration:underline;">Driveのバックアップフォルダを開く ↗</a></div>` : ''}
+        </div>
+      </div>
+
+      <!-- 手動バックアップ -->
+      <button type="button" id="manualBackupBtn" class="btn btn-secondary" style="width:100%;font-size:13px;">
+        今すぐバックアップを作成する
+      </button>
+      <div id="backupMsg" class="form-message" style="display:none;margin-top:8px;"></div>
+    `;
+
+    // イベントリスナー
+    document.getElementById('setupProtectionBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('setupProtectionBtn');
+      btn.disabled = true;
+      btn.textContent = '適用中...';
+      try {
+        await GasAPI.post({ action: 'setupProtection' });
+        this._showMsg('backupMsg', '✅ 全シートに保護を適用しました', 'success');
+        this._renderBackupSection(); // 状態を再読み込み
+      } catch (e) {
+        this._showMsg('backupMsg', '❌ 保護の適用に失敗: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = '再試行';
+      }
+    });
+
+    document.getElementById('toggleBackupTriggerBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('toggleBackupTriggerBtn');
+      const action = bp.triggerActive ? 'removeBackupTrigger' : 'setupBackupTrigger';
+      btn.disabled = true;
+      btn.textContent = '処理中...';
+      try {
+        const res = await GasAPI.post({ action });
+        this._showMsg('backupMsg', '✅ ' + (res.message || '完了'), 'success');
+        this._renderBackupSection();
+      } catch (e) {
+        this._showMsg('backupMsg', '❌ ' + e.message, 'error');
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('saveBackupSettingsBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('saveBackupSettingsBtn');
+      btn.disabled = true;
+      try {
+        await GasAPI.post({
+          action: 'saveBackupSettings',
+          data: {
+            folderPath: document.getElementById('backupFolderPath').value.trim() || 'charm+ バックアップ',
+            maxKeep: Number(document.getElementById('backupMaxKeep').value) || 30,
+          }
+        });
+        this._showMsg('backupMsg', '✅ バックアップ設定を保存しました', 'success');
+      } catch (e) {
+        this._showMsg('backupMsg', '❌ ' + e.message, 'error');
+      }
+      btn.disabled = false;
+    });
+
+    document.getElementById('manualBackupBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('manualBackupBtn');
+      btn.disabled = true;
+      btn.textContent = 'バックアップ作成中...';
+      try {
+        const res = await GasAPI.post({ action: 'createBackup' });
+        this._showMsg('backupMsg', '✅ バックアップを作成しました: ' + (res.backupName || ''), 'success');
+        this._renderBackupSection();
+      } catch (e) {
+        this._showMsg('backupMsg', '❌ バックアップ失敗: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = '今すぐバックアップを作成する';
+      }
+    });
+
+    // メッセージ自動非表示
+    setTimeout(() => {
+      const el = document.getElementById('backupMsg');
+      if (el) el.style.display = 'none';
+    }, 5000);
   },
 
   /* ─── メニュー管理 ──────────────────── */

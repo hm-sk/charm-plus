@@ -1,6 +1,6 @@
 /**
  * charm+ 帳簿アプリ - Google Apps Script
- * Version: 2.0.0 (Phase 3: マスタシート・タグ・領収書対応)
+ * Version: 2.1.0 (Phase 3+: データ保護・バックアップ対応)
  *
  * スプレッドシート構成:
  *   取引シート: id / type / date / amount / category /
@@ -8,6 +8,11 @@
  *              deletedAt / tags / receiptId
  *   設定シート: key / value
  *   マスタシート: key / value（JSON文字列で保存）
+ *
+ * データ保護:
+ *   - シート保護: スクリプト以外からの編集をロック
+ *   - 自動バックアップ: 日次でスプレッドシートをDriveにコピー
+ *   - 手動バックアップ: UIから即座にバックアップ可能
  */
 
 const SHEET_TRANSACTIONS = '取引';
@@ -30,6 +35,7 @@ function doGet(e) {
     else if (action === 'getBookingInfo')    result = getBookingInfo();
     else if (action === 'getAvailableSlots') result = getAvailableSlots(e.parameter.menuId, e.parameter.date);
     else if (action === 'getAppointments')   result = getAppointments(e.parameter.from, e.parameter.to);
+    else if (action === 'getBackupStatus')   result = getBackupStatus();
     else result = { error: '不明なアクション: ' + action };
     return jsonResponse(result);
   } catch (err) {
@@ -55,6 +61,11 @@ function doPost(e) {
     else if (action === 'createAppointment')      result = createAppointment(body.data);
     else if (action === 'updateAppointmentStatus') result = updateAppointmentStatus(body.id, body.status, body.staffNote);
     else if (action === 'cancelAppointment')      result = cancelAppointment(body.id);
+    else if (action === 'setupProtection')        result = setupSheetProtection();
+    else if (action === 'createBackup')           result = createManualBackup();
+    else if (action === 'saveBackupSettings')     result = saveBackupSettings(body.data);
+    else if (action === 'setupBackupTrigger')     result = setupBackupTrigger();
+    else if (action === 'removeBackupTrigger')    result = removeBackupTrigger();
     else result = { error: '不明なアクション: ' + action };
 
     return jsonResponse(result);
@@ -665,6 +676,231 @@ function updateAppointmentStatus(id, status, staffNote) {
 function cancelAppointment(id) {
   return updateAppointmentStatus(id, 'cancelled');
 }
+
+// ─────────────────────────────────────────
+//  データ保護：シート保護
+// ─────────────────────────────────────────
+
+/**
+ * 全データシートに保護を適用
+ * スクリプトオーナーのみ編集可能にし、他ユーザーの直接編集を禁止
+ */
+function setupSheetProtection() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetNames = [SHEET_TRANSACTIONS, SHEET_SETTINGS, SHEET_MASTER, SHEET_CUSTOMERS, SHEET_APPOINTMENTS];
+  const me = Session.getEffectiveUser();
+  const results = [];
+
+  sheetNames.forEach(name => {
+    const sheet = ss.getSheetByName(name);
+    if (!sheet) { results.push({ sheet: name, status: 'not_found' }); return; }
+
+    // 既存の保護を確認・削除してから再設定
+    const existing = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+    existing.forEach(p => p.remove());
+
+    const protection = sheet.protect().setDescription('charm+ データ保護: ' + name);
+    protection.addEditor(me);
+    protection.removeEditors(protection.getEditors().filter(e => e.getEmail() !== me.getEmail()));
+
+    // 警告表示（完全ロックできない場合のフォールバック）
+    if (protection.canDomainEdit()) {
+      protection.setDomainEdit(false);
+    }
+
+    results.push({ sheet: name, status: 'protected' });
+  });
+
+  return { success: true, results };
+}
+
+// ─────────────────────────────────────────
+//  データ保護：自動バックアップ
+// ─────────────────────────────────────────
+
+/** バックアップ設定をマスタシートから取得 */
+function _getBackupConfig() {
+  const master = getMaster();
+  return master.backupConfig || {
+    enabled: false,
+    folderPath: 'charm+ バックアップ',
+    maxKeep: 30,         // 保持する世代数
+    lastBackup: null,
+    lastBackupId: null,
+  };
+}
+
+/** バックアップ設定を保存 */
+function saveBackupSettings(data) {
+  const current = _getBackupConfig();
+  const updated = {
+    enabled:    data.enabled !== undefined ? data.enabled : current.enabled,
+    folderPath: data.folderPath || current.folderPath,
+    maxKeep:    Number(data.maxKeep) || current.maxKeep,
+    lastBackup: current.lastBackup,
+    lastBackupId: current.lastBackupId,
+  };
+  return saveMaster({ backupConfig: updated });
+}
+
+/** バックアップ先フォルダを取得または作成 */
+function _getOrCreateBackupFolder(folderPath) {
+  const parts = folderPath.split('/').filter(Boolean);
+  let parent = DriveApp.getRootFolder();
+
+  for (const part of parts) {
+    const folders = parent.getFoldersByName(part);
+    if (folders.hasNext()) {
+      parent = folders.next();
+    } else {
+      parent = parent.createFolder(part);
+    }
+  }
+  return parent;
+}
+
+/** バックアップ実行（共通処理） */
+function _executeBackup(config) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const folder = _getOrCreateBackupFolder(config.folderPath);
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd_HH-mm');
+  const backupName = ss.getName() + '_backup_' + timestamp;
+
+  // スプレッドシートをコピー
+  const copy = ss.copy(backupName);
+  const file = DriveApp.getFileById(copy.getId());
+
+  // バックアップフォルダに移動
+  file.moveTo(folder);
+
+  // 古いバックアップを世代管理で削除
+  const maxKeep = config.maxKeep || 30;
+  const files = folder.getFiles();
+  const backups = [];
+  while (files.hasNext()) {
+    const f = files.next();
+    if (f.getName().includes('_backup_')) {
+      backups.push({ file: f, date: f.getDateCreated() });
+    }
+  }
+  backups.sort((a, b) => b.date - a.date);
+  if (backups.length > maxKeep) {
+    backups.slice(maxKeep).forEach(b => b.file.setTrashed(true));
+  }
+
+  // 最終バックアップ情報を更新
+  config.lastBackup = new Date().toISOString();
+  config.lastBackupId = copy.getId();
+  saveMaster({ backupConfig: config });
+
+  return {
+    success: true,
+    backupName,
+    fileId: copy.getId(),
+    folderPath: config.folderPath,
+    timestamp: config.lastBackup,
+  };
+}
+
+/** 手動バックアップ（UIから実行） */
+function createManualBackup() {
+  const config = _getBackupConfig();
+  return _executeBackup(config);
+}
+
+/** 自動バックアップ（トリガーから実行） */
+function runScheduledBackup() {
+  const config = _getBackupConfig();
+  if (!config.enabled) return;
+  _executeBackup(config);
+}
+
+/** バックアップ状態を取得 */
+function getBackupStatus() {
+  const config = _getBackupConfig();
+
+  // トリガーの有無を確認
+  const triggers = ScriptApp.getProjectTriggers();
+  const hasBackupTrigger = triggers.some(t => t.getHandlerFunction() === 'runScheduledBackup');
+
+  // バックアップフォルダの情報
+  let folderUrl = null;
+  let backupCount = 0;
+  try {
+    const folder = _getOrCreateBackupFolder(config.folderPath);
+    folderUrl = folder.getUrl();
+    const files = folder.getFiles();
+    while (files.hasNext()) {
+      if (files.next().getName().includes('_backup_')) backupCount++;
+    }
+  } catch (e) { /* フォルダ未作成 */ }
+
+  // シート保護状態
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetNames = [SHEET_TRANSACTIONS, SHEET_SETTINGS, SHEET_MASTER, SHEET_CUSTOMERS, SHEET_APPOINTMENTS];
+  const protectionStatus = {};
+  sheetNames.forEach(name => {
+    const sheet = ss.getSheetByName(name);
+    if (sheet) {
+      const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+      protectionStatus[name] = protections.length > 0;
+    }
+  });
+
+  return {
+    backup: {
+      enabled:       config.enabled,
+      folderPath:    config.folderPath,
+      maxKeep:       config.maxKeep,
+      lastBackup:    config.lastBackup,
+      lastBackupId:  config.lastBackupId,
+      triggerActive: hasBackupTrigger,
+      folderUrl,
+      backupCount,
+    },
+    protection: protectionStatus,
+  };
+}
+
+/** 日次バックアップトリガーをセットアップ */
+function setupBackupTrigger() {
+  // 既存のバックアップトリガーを削除
+  removeBackupTrigger();
+
+  // 毎日午前3時に実行
+  ScriptApp.newTrigger('runScheduledBackup')
+    .timeBased()
+    .atHour(3)
+    .everyDays(1)
+    .create();
+
+  // 設定を有効化
+  const config = _getBackupConfig();
+  config.enabled = true;
+  saveMaster({ backupConfig: config });
+
+  return { success: true, message: '日次バックアップトリガーを設定しました（毎日3:00）' };
+}
+
+/** バックアップトリガーを削除 */
+function removeBackupTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(t => {
+    if (t.getHandlerFunction() === 'runScheduledBackup') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  const config = _getBackupConfig();
+  config.enabled = false;
+  saveMaster({ backupConfig: config });
+
+  return { success: true, message: 'バックアップトリガーを解除しました' };
+}
+
+// ─────────────────────────────────────────
+//  予約リマインダー
+// ─────────────────────────────────────────
 
 /** 前日リマインダー送信（GASトリガーで毎朝実行） */
 function sendDailyReminders() {

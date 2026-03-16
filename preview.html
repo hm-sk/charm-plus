@@ -534,6 +534,71 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
       </div>
     </div>
 
+    <!-- データ保護・バックアップ -->
+    <div class="card" style="margin-top:16px;">
+      <h2 class="section-title">データ保護・バックアップ</h2>
+      <p style="font-size:13px;color:var(--text-sub);margin-bottom:16px;line-height:1.6">
+        スプレッドシートの直接編集ロックと、Driveへの自動バックアップを管理します。
+      </p>
+
+      <!-- シート保護 -->
+      <div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-weight:600;font-size:14px;">シート保護</div>
+          <span style="font-size:12px;padding:2px 8px;border-radius:4px;background:#DEF7EC;color:#03543F;">有効</span>
+        </div>
+        <p style="font-size:12px;color:var(--text-sub);margin-bottom:10px;">
+          スプレッドシート上での直接編集を防止します。アプリ経由の操作のみ許可されます。
+        </p>
+        <button class="btn btn-secondary" style="width:100%;font-size:13px;">保護を再適用する</button>
+      </div>
+
+      <!-- 自動バックアップ -->
+      <div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-weight:600;font-size:14px;">自動バックアップ</div>
+          <span style="font-size:12px;padding:2px 8px;border-radius:4px;background:#DEF7EC;color:#03543F;">有効（毎日3:00）</span>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:var(--text-sub);display:block;margin-bottom:4px;">バックアップ先フォルダ</label>
+          <input type="text" value="charm+ バックアップ"
+            style="width:100%;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:6px 10px;font-size:13px;font-family:var(--font-sans);box-sizing:border-box;">
+          <p style="font-size:11px;color:var(--text-light);margin-top:4px;">
+            Google Driveのルートからのパス（例: サロン/バックアップ）
+          </p>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:var(--text-sub);display:block;margin-bottom:4px;">保持世代数</label>
+          <input type="number" value="30" min="1" max="365"
+            style="width:80px;border:1.5px solid var(--border-normal);border-radius:var(--radius-sm);padding:6px 10px;font-size:13px;font-family:var(--font-sans);">
+          <span style="font-size:12px;color:var(--text-sub);margin-left:4px;">件（古いバックアップは自動削除）</span>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button class="btn" style="flex:1;font-size:13px;background:#B07070;color:white;border:none;padding:8px 16px;border-radius:var(--radius-sm);cursor:pointer;">自動バックアップを停止</button>
+          <button class="btn btn-secondary" style="font-size:13px;">設定保存</button>
+        </div>
+
+        <!-- ステータス表示 -->
+        <div style="background:var(--bg);border-radius:6px;padding:10px;font-size:12px;color:var(--text-sub);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span>最終バックアップ:</span>
+            <span style="font-weight:500;color:var(--text);">2026/03/16 03:00</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span>バックアップ数:</span>
+            <span style="font-weight:500;color:var(--text);">12 件</span>
+          </div>
+          <div style="margin-top:6px;"><a href="#" style="color:var(--accent);font-size:12px;text-decoration:underline;">Driveのバックアップフォルダを開く ↗</a></div>
+        </div>
+      </div>
+
+      <!-- 手動バックアップ -->
+      <button class="btn btn-secondary" style="width:100%;font-size:13px;">今すぐバックアップを作成する</button>
+    </div>
+
     <div class="card" style="border:1px solid #E8D8D8;margin-top:16px;">
       <h2 class="section-title">データ管理</h2>
       <p style="font-size:0.8rem;color:#9A5E5E;background:#F5EDED;padding:8px 12px;border-radius:6px;margin-bottom:12px;">⚠️ 以下の操作は元に戻せません</p>
