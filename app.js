@@ -140,7 +140,10 @@ const GasAPI = {
   },
 
   async getAppointments(from, to) {
-    const url = `${GAS_URL}?action=getAppointments&from=${from}&to=${to}`;
+    const params = new URLSearchParams({ action: 'getAppointments' });
+    if (from) params.set('from', from);
+    if (to)   params.set('to', to);
+    const url = `${GAS_URL}?${params.toString()}`;
     const res = await fetch(url, { redirect: 'follow' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
@@ -3066,6 +3069,15 @@ const AppointmentData = {
   async loadFromGas(from, to) {
     if (!GasAPI.isConfigured()) return false;
     try {
+      // デフォルト: 30日前〜60日後（管理画面での通常利用範囲）
+      if (!from) {
+        const d = new Date(); d.setDate(d.getDate() - 30);
+        from = d.toISOString().split('T')[0];
+      }
+      if (!to) {
+        const d = new Date(); d.setDate(d.getDate() + 60);
+        to = d.toISOString().split('T')[0];
+      }
       const list = await GasAPI.getAppointments(from, to);
       // 既存キャッシュと日付範囲をマージ（単純に全上書き）
       this.saveAll(list);
