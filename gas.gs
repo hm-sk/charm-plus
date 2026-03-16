@@ -511,7 +511,10 @@ function getAvailableSlots(menuId, date) {
     rows.slice(1).forEach(row => {
       const status = String(row[stIdx] || '');
       if (status === 'cancelled' || status === 'noshow') return;
-      const apptDt = String(row[dtIdx] || '');
+      const rawDt  = row[dtIdx];
+      const apptDt = rawDt instanceof Date
+        ? Utilities.formatDate(rawDt, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm")
+        : String(rawDt || '');
       if (!apptDt.startsWith(date)) return;
       const apptTime    = apptDt.split('T')[1]?.substring(0, 5) || apptDt.split(' ')[1]?.substring(0, 5) || '';
       const apptDur     = Number(row[durIdx]) || 60;
@@ -564,6 +567,13 @@ function getAppointments(from, to) {
         a[h] = row[j] === true || row[j] === 'TRUE';
       } else if (h === 'createdAt') {
         a[h] = row[j] instanceof Date ? formatCellDate(row[j]) : String(row[j] ?? '');
+      } else if (h === 'dateTime') {
+        // Sheets がロケールによって Date 型に自動変換することがあるため専用処理
+        if (row[j] instanceof Date) {
+          a[h] = Utilities.formatDate(row[j], Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm");
+        } else {
+          a[h] = row[j] === undefined || row[j] === null ? '' : String(row[j]);
+        }
       } else {
         a[h] = row[j] === undefined || row[j] === null ? '' : String(row[j]);
       }

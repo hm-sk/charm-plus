@@ -681,11 +681,9 @@ const Format = {
 
   date(dateStr) {
     if (!dateStr) return '';
-    const d = new Date(dateStr);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${y}/${m}/${dd}`;
+    // new Date("YYYY-MM-DD") は UTC 00:00 解釈のため JST 等で -1日ズレる。文字列を直接パース
+    const [y, m, d] = dateStr.substring(0, 10).split('-');
+    return `${y}/${m}/${d}`;
   },
 };
 
