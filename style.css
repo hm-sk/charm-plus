@@ -621,6 +621,24 @@ body {
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
 
+.btn-filter-apply {
+  padding: 8px 18px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  align-self: center;
+}
+.btn-filter-apply:hover {
+  background: var(--accent-hover);
+}
+
 /* =============================================
    空状態
    ============================================= */
