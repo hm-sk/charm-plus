@@ -2603,7 +2603,7 @@ const UI = {
     `;
 
     const form = document.getElementById('recordForm');
-    recordTab.insertBefore(tplSection, form);
+    form.parentNode.insertBefore(tplSection, form);
 
     // テンプレート開閉
     document.getElementById('templateToggleRow').addEventListener('click', () => {
