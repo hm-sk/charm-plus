@@ -837,9 +837,14 @@ function runScheduledBackup() {
 function getBackupStatus() {
   const config = _getBackupConfig();
 
-  // トリガーの有無を確認
-  const triggers = ScriptApp.getProjectTriggers();
-  const hasBackupTrigger = triggers.some(t => t.getHandlerFunction() === 'runScheduledBackup');
+  // トリガーの有無を確認（script.scriptapp スコープが必要）
+  let hasBackupTrigger = false;
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    hasBackupTrigger = triggers.some(t => t.getHandlerFunction() === 'runScheduledBackup');
+  } catch (e) {
+    // スコープ未認可の場合はスキップ（appsscript.json に script.scriptapp を追加後、再デプロイで解消）
+  }
 
   // バックアップフォルダの情報
   let folderUrl = null;
