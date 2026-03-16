@@ -3116,9 +3116,14 @@ const UI = {
   /* ─── フィルター ─────────────────────── */
 
   initFilters() {
-    ['filterMonth', 'filterType', 'filterCategory', 'filterTag'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('change', () => this.renderList());
+    // 各selectに直接張るのではなく、親要素へのイベントデリゲーション。
+    // _rebuildFilterOptions()がselectのinnerHTMLを書き換えても
+    // リスナーが失われない。
+    const filterBar = document.querySelector('.filter-bar');
+    if (!filterBar) return;
+    filterBar.addEventListener('change', (e) => {
+      const ids = ['filterMonth', 'filterType', 'filterCategory', 'filterTag'];
+      if (ids.includes(e.target.id)) this.renderList();
     });
   },
 
