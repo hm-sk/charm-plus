@@ -3118,7 +3118,7 @@ const UI = {
   initFilters() {
     ['filterMonth', 'filterType', 'filterCategory', 'filterTag'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.addEventListener('change', () => this._applyFilters());
+      if (el) el.addEventListener('change', () => this.renderList());
     });
   },
 
