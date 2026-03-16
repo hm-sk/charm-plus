@@ -1040,21 +1040,22 @@ const UI = {
     // 日付降順（新しい順）にソート
     list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-    // フィルター状態バーを更新
-    const total      = Data.getAll().length;
-    const isFiltered = !!(month || type || category || tag);
-    this._updateFilterStatus(isFiltered, list.length, total);
-
+    // リスト描画を先に行う（_updateFilterStatus の例外に影響されないよう）
     const listEl  = document.getElementById('transactionList');
     const emptyEl = document.getElementById('listEmpty');
+    if (!listEl || !emptyEl) return;
     listEl.innerHTML = '';
-
     if (list.length === 0) {
       emptyEl.style.display = 'block';
     } else {
       emptyEl.style.display = 'none';
       list.forEach(t => listEl.appendChild(this._buildItem(t, true)));
     }
+
+    // フィルター状態バーを更新（後処理なので例外があっても一覧には影響しない）
+    const total      = Data.getAll().length;
+    const isFiltered = !!(month || type || category || tag);
+    try { this._updateFilterStatus(isFiltered, list.length, total); } catch (_) { /* noop */ }
   },
 
   /** フィルター状態バーの表示・非表示を切り替え */
@@ -3118,6 +3119,7 @@ const UI = {
 
   initFilters() {
     this._bindFilterHandlers();
+    this._startFilterWatcher();
   },
 
   /** フィルターselect に onchange/oninput を直接代入（毎回上書きOK） */
@@ -3127,8 +3129,22 @@ const UI = {
       const el = document.getElementById(id);
       if (!el) return;
       el.onchange = apply;
-      el.oninput  = apply;   // モバイル対策
+      el.oninput  = apply;
     });
+  },
+
+  /**
+   * select値をポーリングして変化を検知（イベントが届かない環境の保険）。
+   * イベント方式が動けばこちらは何もしないため副作用なし。
+   */
+  _startFilterWatcher() {
+    const ids = ['filterMonth', 'filterType', 'filterCategory', 'filterTag'];
+    const snap = () => ids.map(id => document.getElementById(id)?.value ?? '').join('\n');
+    let prev = snap();
+    setInterval(() => {
+      const curr = snap();
+      if (curr !== prev) { prev = curr; this._applyFilters(); }
+    }, 100);
   },
 
   /* ─── 帳簿タブ ───────────────────────── */
