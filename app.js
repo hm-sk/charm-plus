@@ -2752,6 +2752,10 @@ const UI = {
     document.getElementById('inputAmount').value      = '';
     document.getElementById('inputDescription').value = '';
     document.getElementById('inputDate').value        = this._todayStr();
+    const tagsInput = document.getElementById('inputTags');
+    if (tagsInput) tagsInput.value = '';
+    this._rebuildCategoryOptions();
+    this._updateAllocationDisplay();
   },
 
   _rebuildCategoryOptions() {
@@ -2914,9 +2918,10 @@ const UI = {
   /** 画面上部にトースト通知を表示（4秒後に自動消去） */
   _showToast(msg, type = 'error') {
     const styles = {
-      error: { bg: '#FEE2E2', color: '#DC2626', border: '#FCA5A5' },
+      error:   { bg: '#FEE2E2', color: '#DC2626', border: '#FCA5A5' },
       success: { bg: '#D1FAE5', color: '#065F46', border: '#6EE7B7' },
-      warn:  { bg: '#FEF3C7', color: '#92400E', border: '#FCD34D' },
+      warn:    { bg: '#FEF3C7', color: '#92400E', border: '#FCD34D' },
+      info:    { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
     };
     const s = styles[type] || styles.error;
     const toast = document.createElement('div');
@@ -3292,6 +3297,16 @@ const UI = {
     el.style.display = 'block';
   },
 
+  /** File を Base64 文字列（データ部のみ）に変換 */
+  _fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(e.target.result.split(',')[1]);
+      reader.onerror = () => reject(new Error('ファイル読み込みに失敗しました'));
+      reader.readAsDataURL(file);
+    });
+  },
+
   /* ─── オフライン検知 ────────────────────── */
 
   initOfflineDetection() {
@@ -3533,8 +3548,8 @@ const AppointmentUI = {
       type:      'income',
       amount:    Number(appt.price || 0),
       category:  '売上',
-      memo:      `${appt.menuName || 'メニュー'}（予約 #${appt.id.substring(0, 8)}）`,
-      paymentMethod: Master.getPaymentMethods()[0] || '現金',
+      description: `${appt.menuName || 'メニュー'}（予約 #${appt.id.substring(0, 8)}）`,
+      paymentMethod: Master.getPaymentMethods()[0]?.value || 'cash',
       tags:      [],
       appointmentId: appt.id,
       createdAt: new Date().toISOString(),
