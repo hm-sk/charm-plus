@@ -3116,15 +3116,8 @@ const UI = {
   /* ─── フィルター ─────────────────────── */
 
   initFilters() {
-    // 各selectに直接張るのではなく、親要素へのイベントデリゲーション。
-    // _rebuildFilterOptions()がselectのinnerHTMLを書き換えても
-    // リスナーが失われない。
-    const filterBar = document.querySelector('.filter-bar');
-    if (!filterBar) return;
-    filterBar.addEventListener('change', (e) => {
-      const ids = ['filterMonth', 'filterType', 'filterCategory', 'filterTag'];
-      if (ids.includes(e.target.id)) this.renderList();
-    });
+    document.getElementById('filterApplyBtn')
+      ?.addEventListener('click', () => this.renderList());
   },
 
   /* ─── 帳簿タブ ───────────────────────── */
