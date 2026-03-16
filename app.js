@@ -529,6 +529,15 @@ const Master = {
     this._setRaw({ ...this._raw(), bookingWindowDays: Number(days) || 60 });
   },
 
+  /** リピート来店の目安間隔（日数）*/
+  getVisitIntervalDays() {
+    return this._raw().visitIntervalDays || 28;
+  },
+
+  saveVisitIntervalDays(days) {
+    this._setRaw({ ...this._raw(), visitIntervalDays: Number(days) || 28 });
+  },
+
   saveMenus(menus) {
     this._setRaw({ ...this._raw(), menus });
   },
@@ -831,6 +840,7 @@ const UI = {
     if (forecastEl) forecastEl.textContent = Format.currency(forecast);
 
     this._renderTodaySchedule();
+    this._renderRepeatAlerts();
 
     const listEl = document.getElementById('recentList');
     listEl.innerHTML = '';
@@ -868,6 +878,59 @@ const UI = {
           <div style="font-size:12px;color:var(--text-sub);">${UI._esc(a.menuName || '')} ／ ¥${Number(a.price || 0).toLocaleString()}</div>
         </div>
         <span style="font-size:12px;color:var(--text-sub);flex-shrink:0;">${Number(a.duration || 0)}分</span>
+      </div>`;
+    }).join('');
+  },
+
+  // リピートが近い・超過中の顧客をダッシュボードに表示
+  _renderRepeatAlerts() {
+    const el = document.getElementById('repeatAlertList');
+    if (!el) return;
+
+    const interval = Master.getVisitIntervalDays();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // lastVisit がある顧客を次回来店日順で並べ、14日以内or超過の人だけ表示
+    const alerts = CustomerData.getAll()
+      .filter(c => c.lastVisit)
+      .map(c => {
+        const last = new Date(c.lastVisit + 'T00:00:00');
+        const next = new Date(last);
+        next.setDate(next.getDate() + interval);
+        const diffDays = Math.round((next - today) / 86400000);
+        return { ...c, nextVisit: next.toISOString().split('T')[0], diffDays };
+      })
+      .filter(c => c.diffDays <= 14)
+      .sort((a, b) => a.diffDays - b.diffDays);
+
+    if (!alerts.length) {
+      el.innerHTML = '<p style="text-align:center;color:var(--text-light);font-size:13px;padding:20px 0;">直近14日以内のリピート対象者はいません</p>';
+      return;
+    }
+
+    el.innerHTML = alerts.map(c => {
+      const [, m, d] = c.nextVisit.split('-');
+      const label = `${Number(m)}月${Number(d)}日`;
+      const isOverdue = c.diffDays < 0;
+      const color = isOverdue ? 'var(--rose)' : (c.diffDays <= 7 ? 'var(--accent)' : 'var(--text-sub)');
+      const diffLabel = isOverdue
+        ? `${Math.abs(c.diffDays)}日超過`
+        : (c.diffDays === 0 ? '本日' : `あと${c.diffDays}日`);
+      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--accent-dim);
+                    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+                    font-family:var(--font-serif);font-size:1rem;color:var(--accent);font-weight:700;">
+          ${UI._esc((c.name || '？').charAt(0))}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:14px;">${UI._esc(c.name || '')}</div>
+          <div style="font-size:12px;color:var(--text-sub);">最終来店: ${UI._esc(c.lastVisit)} ／ ${c.visitCount || 0}回来店</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:13px;font-weight:700;color:${color};">${label}</div>
+          <div style="font-size:11px;color:${color};">${diffLabel}</div>
+        </div>
       </div>`;
     }).join('');
   },
@@ -1879,6 +1942,13 @@ const UI = {
         <span style="font-size:12px;color:var(--text-sub);">日先まで受け付ける（7〜365）</span>
       </div>
 
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+        <label style="font-size:13px;font-weight:700;white-space:nowrap;">リピート目安間隔</label>
+        <input type="number" id="visitIntervalDays" value="${Master.getVisitIntervalDays()}" min="7" max="180" step="1"
+          style="${inputStyle} width:70px;">
+        <span style="font-size:12px;color:var(--text-sub);">日（ダッシュボードの来店提案に使用）</span>
+      </div>
+
       <div id="bhMsg" class="form-message" style="display:none;margin-top:10px;"></div>
       <button type="button" id="saveBusinessHoursBtn" class="btn btn-primary" style="margin-top:14px;">保存する</button>
     `;
@@ -1909,9 +1979,11 @@ const UI = {
           newHours[d.key] = { open, close };
         }
       });
-      const windowDays = Number(document.getElementById('bookingWindowDays').value) || 60;
+      const windowDays   = Number(document.getElementById('bookingWindowDays').value) || 60;
+      const intervalDays = Number(document.getElementById('visitIntervalDays').value) || 28;
       Master.saveBusinessHours(newHours);
       Master.saveBookingWindowDays(windowDays);
+      Master.saveVisitIntervalDays(intervalDays);
       this._saveMasterToGas();
       this._showMsg('bhMsg', '✅ 営業時間設定を保存しました', 'success');
     });
@@ -3432,6 +3504,7 @@ const CustomerUI = {
         <div style="text-align:right;font-size:0.72rem;color:var(--text-sub);flex-shrink:0;">
           ${c.lastVisit ? `最終来店<br><span style="color:var(--text);font-weight:600;">${this._esc(c.lastVisit)}</span>` : '<span style="color:var(--text-light);">未来店</span>'}
           <br><span style="margin-top:4px;display:inline-block;">来店 <strong>${c.visitCount || 0}</strong> 回</span>
+          ${this._nextVisitBadge(c)}
         </div>
         <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;">
           <button class="cust-edit-btn edit-btn" data-id="${this._esc(c.id)}"
@@ -3546,6 +3619,37 @@ const CustomerUI = {
       this.renderCustomers();
       UI._showToast('🗑️ 顧客を削除しました', 'info');
     });
+  },
+
+  // 次回来店提案日を計算（lastVisit + visitIntervalDays）
+  _nextVisitInfo(customer) {
+    if (!customer.lastVisit) return null;
+    const interval = Master.getVisitIntervalDays();
+    const last = new Date(customer.lastVisit + 'T00:00:00');
+    const next = new Date(last);
+    next.setDate(next.getDate() + interval);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((next - today) / 86400000);
+    return { date: next.toISOString().split('T')[0], diffDays };
+  },
+
+  // 次回来店バッジHTML（顧客カード右側に表示）
+  _nextVisitBadge(customer) {
+    const info = this._nextVisitInfo(customer);
+    if (!info) return '';
+    const { date, diffDays } = info;
+    const [y, m, d] = date.split('-');
+    const label = `${Number(m)}/${Number(d)}`;
+    if (diffDays < 0) {
+      // 過ぎている
+      return `<br><span style="color:var(--rose);font-weight:700;">次回 ${label}（${Math.abs(diffDays)}日超過）</span>`;
+    } else if (diffDays <= 7) {
+      // 7日以内
+      return `<br><span style="color:var(--accent);font-weight:700;">次回 ${label}（あと${diffDays}日）</span>`;
+    } else {
+      return `<br><span style="color:var(--text-light);">次回目安 ${label}</span>`;
+    }
   },
 
   _esc(str) {
