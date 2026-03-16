@@ -2299,6 +2299,8 @@ const UI = {
         <button type="button" id="generateQrBtn" class="btn btn-primary">QR生成</button>
         <button type="button" id="copyUrlBtn" class="btn btn-secondary"
           style="border:1.5px solid var(--border-normal);background:none;color:var(--text);">URLコピー</button>
+        <a href="booking.html" target="_blank" class="btn btn-secondary"
+          style="border:1.5px solid var(--accent);color:var(--accent);background:none;text-decoration:none;">予約フォームを開く</a>
       </div>
       <div id="qrCanvas" style="margin-top:16px;display:flex;flex-direction:column;align-items:center;gap:10px;"></div>
     `;
