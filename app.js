@@ -967,6 +967,7 @@ const UI = {
 
   renderList() {
     this._rebuildFilterOptions();
+    this._bindFilterHandlers();   // DOM再構築後にハンドラを再代入
     this._applyFilters();
   },
 
@@ -3116,11 +3117,17 @@ const UI = {
   /* ─── フィルター ─────────────────────── */
 
   initFilters() {
-    const filterBar = document.querySelector('.filter-bar');
-    if (!filterBar) return;
-    filterBar.addEventListener('change', (e) => {
-      const ids = ['filterMonth', 'filterType', 'filterCategory', 'filterTag'];
-      if (ids.includes(e.target.id)) this.renderList();
+    this._bindFilterHandlers();
+  },
+
+  /** フィルターselect に onchange/oninput を直接代入（毎回上書きOK） */
+  _bindFilterHandlers() {
+    const apply = () => this._applyFilters();
+    ['filterMonth', 'filterType', 'filterCategory', 'filterTag'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.onchange = apply;
+      el.oninput  = apply;   // モバイル対策
     });
   },
 
