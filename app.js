@@ -2837,13 +2837,16 @@ const UI = {
       if (this._editMode && this._editingId) {
         await Data.update({ id: this._editingId, ...payload });
         this._cancelEdit();
-        this._showMsg('formMessage', '✅ 内容を更新しました！', 'success');
+        this._showToast('✅ 内容を更新しました！', 'success');
+        this.showTab('list'); // 編集後は一覧タブへ戻る
       } else {
         const label = this.currentType === 'income' ? '売上' : '経費';
         await Data.add(payload);
         document.getElementById('inputAmount').value      = '';
         document.getElementById('inputDescription').value = '';
         document.getElementById('inputDate').value        = this._todayStr();
+        const menuSel = document.getElementById('inputMenuSelect');
+        if (menuSel) menuSel.value = '';
         if (document.getElementById('inputTags')) document.getElementById('inputTags').value = '';
         if (receiptInput) {
           receiptInput.value = '';
@@ -2895,10 +2898,9 @@ const UI = {
       this._closeModal();
       try {
         await Data.remove(id);
-        this._applyFilters();
-        if (document.getElementById('tab-dashboard').classList.contains('active')) {
-          this.renderDashboard();
-        }
+        // フィルター選択肢ごと再構築（削除済み月・タグが残らないよう）
+        this.renderList();
+        this.renderDashboard();
       } catch (e) {
         this._showToast(`❌ 削除に失敗しました: ${e.message}`);
       }
